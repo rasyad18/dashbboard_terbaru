@@ -376,6 +376,7 @@ body {
    Aturan ini cuma untuk hide elemen interaktif & memastikan chart tidak berubah ukuran. */
 body.pdf-mode .status-bar,
 body.pdf-mode .date-picker-bar,
+body.pdf-mode .unit-filter-bar,
 body.pdf-mode .export-bar,
 body.pdf-mode .toast,
 body.pdf-mode .date-popover,
@@ -404,6 +405,28 @@ body.pdf-mode .chart-wrap canvas { max-width: 100% !important; }
   .brand-title { font-size: 28px; }
   .date-trigger { min-width: 0; width: 100%; }
 }
+
+/* UNIT FILTER BAR */
+.unit-filter-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--bg-card); border: 1px solid var(--border);
+  padding: 12px 20px; border-radius: 10px; margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(48,49,53,0.04);
+}
+.unit-pill {
+  background: var(--bg); border: 1px solid var(--border-light); color: var(--text-dim);
+  padding: 6px 14px; border-radius: 20px; font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.8px; cursor: pointer; transition: all 0.15s;
+  text-transform: uppercase; font-weight: 600; user-select: none;
+}
+.unit-pill:hover { border-color: var(--accent); color: var(--text); }
+.unit-pill.active { background: var(--accent); color: #FFFFFF; border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,124,255,0.3); }
+.unit-pill.all-pill { border-style: dashed; }
+.unit-pill.all-pill.active { background: var(--tiket-blue-bg); color: var(--accent); border-style: solid; border-color: var(--accent); box-shadow: none; }
+/* Dual-chart containers (PDA comp/DOW + pendapatan pies with compare) */
+.dual-chart-wrap { display: flex; gap: 16px; }
+.dual-chart-wrap > div { flex: 1; position: relative; min-width: 0; }
+.dual-chart-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-faint); letter-spacing: 1.5px; text-transform: uppercase; text-align: center; margin-bottom: 4px; }
 
 </style>
 </head>
@@ -493,10 +516,7 @@ body.pdf-mode .chart-wrap canvas { max-width: 100% !important; }
     </div>
     <div class="chart-wrap tall"><canvas id="pdaTrend"></canvas></div>
   </div>
-  <div class="panel">
-    <div class="panel-header"><div><div class="panel-title">Komposisi Revenue</div><div class="panel-subtitle">Mix of revenue streams</div></div></div>
-    <div class="chart-wrap tall"><canvas id="pdaComp"></canvas></div>
-  </div>
+  <div class="panel" id="pdaCompWrap"><!-- populated by renderPDAComp() --></div>
 </div>
 <div class="row row-2">
   <div class="panel">
@@ -509,10 +529,7 @@ body.pdf-mode .chart-wrap canvas { max-width: 100% !important; }
   </div>
 </div>
 <div class="row row-2">
-  <div class="panel">
-    <div class="panel-header"><div><div class="panel-title">Performa per Hari Dalam Minggu</div><div class="panel-subtitle">Day-of-week analysis</div></div></div>
-    <div class="chart-wrap"><canvas id="pdaDow"></canvas></div>
-  </div>
+  <div class="panel" id="pdaDowWrap"><!-- populated by renderPDADow() --></div>
   <div class="panel">
     <div class="panel-header"><div><div class="panel-title">Breakdown Bulanan</div><div class="panel-subtitle">Monthly revenue</div></div></div>
     <div class="chart-wrap"><canvas id="pdaMonthly"></canvas></div>
@@ -533,18 +550,9 @@ body.pdf-mode .chart-wrap canvas { max-width: 100% !important; }
   </div>
 </div>
 <div class="row row-3-pies">
-  <div class="panel">
-    <div class="panel-header"><div><div class="panel-title">Pendapatan per Platform</div><div class="panel-subtitle">All units</div></div></div>
-    <div class="chart-wrap"><canvas id="piePlatform"></canvas></div>
-  </div>
-  <div class="panel">
-    <div class="panel-header"><div><div class="panel-title">Pendapatan per Jenis Tiket</div><div class="panel-subtitle">All units</div></div></div>
-    <div class="chart-wrap"><canvas id="pieJenis"></canvas></div>
-  </div>
-  <div class="panel">
-    <div class="panel-header"><div><div class="panel-title">Pendapatan per Kelompok Jenis Tiket</div><div class="panel-subtitle">All units</div></div></div>
-    <div class="chart-wrap"><canvas id="pieKelompok"></canvas></div>
-  </div>
+  <div class="panel" id="piePlatformWrap"><!-- populated by renderPendapatanOverall() --></div>
+  <div class="panel" id="pieJenisWrap"><!-- populated by renderPendapatanOverall() --></div>
+  <div class="panel" id="pieKelompokWrap"><!-- populated by renderPendapatanOverall() --></div>
 </div>
 <div class="row row-1">
   <div class="panel">
@@ -650,13 +658,14 @@ const startOfWeekSunday = d => { const x = new Date(d); x.setDate(x.getDate() - 
 
 // ============ STATE ============
 const state = {
-  pdaRaw: [],     // PDA records with year/month/day
+  pdaRaw: [],     // PDA records with date/occ/room/fb/rr/total/genrev
   penjRaw: [],    // Penjualan records {d, u, p, j, k, r, v}
-  pengunjungRaw: [], // Pengunjung records {d, u, p, j, k, q} — q = jumlah pengunjung
+  pengunjungRaw: [], // Pengunjung records {d, u, p, j, k, q}
   dataMin: null, dataMax: null,
-  cur: { start: null, end: null, presetKey: 'last28' },
-  cmp: { start: null, end: null, mode: 'previous_year_match_dow', enabled: true },
+  cur: { start: '2026-01-01', end: '2026-01-31', presetKey: 'jan_2026' },
+  cmp: { start: '2025-01-01', end: '2025-01-31', mode: 'previous_year', enabled: false },
   trendMetric: 'total',
+  selectedUnits: new Set(), // kosong = semua unit (berlaku untuk Pendapatan & Pengunjung)
   pdaUrl: PDA_URL_DEFAULT, penjUrl: PENJ_URL_DEFAULT, pengunjungUrl: PENGUNJUNG_URL_DEFAULT,
   pdaLastFetch: null, penjLastFetch: null, pengunjungLastFetch: null,
   pdaStatus: 'init', penjStatus: 'init',
@@ -986,6 +995,7 @@ function applyPreset(key) {
   const anchor = dataAnchor();
   let start, end;
   switch(key) {
+    case 'jan_2026': start = new Date(2026, 0, 1); end = new Date(2026, 0, 31); break;
     case 'today': start = end = anchor; break;
     case 'yesterday': start = end = addDays(anchor, -1); break;
     case 'this_week_sun': start = startOfWeekSunday(anchor); end = anchor; break;
@@ -1028,11 +1038,15 @@ function filterPDA(start, end) {
 }
 function filterPenj(start, end) {
   if (!start || !end) return [];
-  return state.penjRaw.filter(r => r.d >= start && r.d <= end);
+  let rows = state.penjRaw.filter(r => r.d >= start && r.d <= end);
+  if (state.selectedUnits.size > 0) rows = rows.filter(r => state.selectedUnits.has(r.u));
+  return rows;
 }
 function filterPengunjung(start, end) {
   if (!start || !end) return [];
-  return state.pengunjungRaw.filter(r => r.d >= start && r.d <= end);
+  let rows = state.pengunjungRaw.filter(r => r.d >= start && r.d <= end);
+  if (state.selectedUnits.size > 0) rows = rows.filter(r => state.selectedUnits.has(r.u));
+  return rows;
 }
 function pct(curr, prev) {
   if (!prev || prev === 0) return null;
@@ -1082,7 +1096,7 @@ function makeChart(canvasId, config) {
 
 // ============ HEADER + COMPARE SUMMARY ============
 const PRESET_LABELS = {
-  today: 'Today', yesterday: 'Yesterday', this_week_sun: 'This week (Sun - Today)',
+  jan_2026: 'Januari 2026', today: 'Today', yesterday: 'Yesterday', this_week_sun: 'This week (Sun - Today)',
   last7: 'Last 7 days', last_week_sun_sat: 'Last week (Sun - Sat)',
   last28: 'Last 28 days', last30: 'Last 30 days', this_month: 'This month',
   last_month: 'Last month', ytd: 'Year to date', all_time: 'All time', custom: 'Custom'
@@ -1193,19 +1207,45 @@ function renderPDATrend() {
 }
 
 function renderPDAComp() {
-  const t = pdaTotals(filterPDA(state.cur.start, state.cur.end));
+  const curRows = filterPDA(state.cur.start, state.cur.end);
+  const cmpRows = state.cmp.enabled ? filterPDA(state.cmp.start, state.cmp.end) : [];
+  const hasCmp = state.cmp.enabled && cmpRows.length > 0;
+  const wrap = document.getElementById('pdaCompWrap');
+  if (!wrap) return;
+  if (hasCmp) {
+    wrap.innerHTML = `
+      <div class="panel-header">
+        <div><div class="panel-title">Komposisi Revenue</div>
+          <div class="panel-subtitle">Kiri: Periode Analisis &middot; Kanan: Pembanding</div></div>
+      </div>
+      <div class="dual-chart-wrap" style="height:300px">
+        <div><div class="dual-chart-label">Periode Analisis</div><canvas id="pdaComp"></canvas></div>
+        <div><div class="dual-chart-label">Pembanding</div><canvas id="pdaCompCmp"></canvas></div>
+      </div>`;
+    _renderPDACompPie('pdaComp', curRows);
+    _renderPDACompPie('pdaCompCmp', cmpRows);
+  } else {
+    wrap.innerHTML = `
+      <div class="panel-header"><div><div class="panel-title">Komposisi Revenue</div>
+        <div class="panel-subtitle">Mix of revenue streams</div></div></div>
+      <div class="chart-wrap tall"><canvas id="pdaComp"></canvas></div>`;
+    _renderPDACompPie('pdaComp', curRows);
+  }
+}
+function _renderPDACompPie(canvasId, rows) {
+  const t = pdaTotals(rows);
   const data = [t.room, t.fb, t.rr];
-  const total = data.reduce((a,b)=>a+b,0);
-  const rowsCount = filterPDA(state.cur.start, state.cur.end).length;
-  makeChart('pdaComp', {
+  const total = data.reduce((a, b) => a + b, 0);
+  const count = rows.length;
+  makeChart(canvasId, {
     type: 'doughnut',
     data: { labels: ['Room', 'Food & Beverage', 'Rupa-Rupa'], datasets: [{ data, backgroundColor: ['#007CFF', '#5BAAFF', '#A3CFFF'], borderColor: '#FFFFFF', borderWidth: 3, hoverOffset: 8 }] },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '62%',
       plugins: {
-        legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12 } },
+        legend: { position: 'bottom', labels: { boxWidth: 10, padding: 10 } },
         tooltip: { backgroundColor: '#303135', titleColor: '#FFFFFF', bodyColor: '#F4F7FE', borderColor: '#4D4F56', borderWidth: 1, padding: 12,
-          callbacks: { label: ctx => `${ctx.label}: ${FMT_RP(ctx.parsed)} (${total>0 ? (ctx.parsed/total*100).toFixed(1) : 0}%)` } }
+          callbacks: { label: ctx => `${ctx.label}: ${FMT_RP(ctx.parsed)} (${total > 0 ? (ctx.parsed / total * 100).toFixed(1) : 0}%)` } }
       }
     },
     plugins: [{
@@ -1214,11 +1254,11 @@ function renderPDAComp() {
         const { ctx, chartArea: { width, height, top } } = chart;
         ctx.save();
         ctx.fillStyle = '#71747D'; ctx.font = '500 10px JetBrains Mono'; ctx.textAlign = 'center';
-        ctx.fillText('TOTAL REVENUE', width/2, top + height/2 - 22);
-        ctx.fillStyle = '#303135'; ctx.font = '500 16px Fraunces';
-        ctx.fillText(FMT_RP_COMPACT(total), width/2, top + height/2 + 4);
-        ctx.fillStyle = '#AEB2BE'; ctx.font = '400 11px Inter';
-        ctx.fillText(rowsCount + ' hari', width/2, top + height/2 + 26);
+        ctx.fillText('TOTAL REVENUE', width / 2, top + height / 2 - 22);
+        ctx.fillStyle = '#303135'; ctx.font = '500 15px Fraunces';
+        ctx.fillText(FMT_RP_COMPACT(total), width / 2, top + height / 2 + 4);
+        ctx.fillStyle = '#AEB2BE'; ctx.font = '400 10px Inter';
+        ctx.fillText(count + ' hari', width / 2, top + height / 2 + 22);
         ctx.restore();
       }
     }]
@@ -1261,20 +1301,44 @@ function renderPDARate() {
 }
 
 function renderPDADow() {
-  const rows = filterPDA(state.cur.start, state.cur.end);
+  const curRows = filterPDA(state.cur.start, state.cur.end);
+  const cmpRows = state.cmp.enabled ? filterPDA(state.cmp.start, state.cmp.end) : [];
+  const hasCmp = state.cmp.enabled && cmpRows.length > 0;
+  const wrap = document.getElementById('pdaDowWrap');
+  if (!wrap) return;
+  if (hasCmp) {
+    wrap.innerHTML = `
+      <div class="panel-header">
+        <div><div class="panel-title">Performa per Hari Dalam Minggu</div>
+          <div class="panel-subtitle">Kiri: Periode Analisis &middot; Kanan: Pembanding</div></div>
+      </div>
+      <div class="dual-chart-wrap" style="height:260px">
+        <div><div class="dual-chart-label">Periode Analisis</div><canvas id="pdaDow"></canvas></div>
+        <div><div class="dual-chart-label">Pembanding</div><canvas id="pdaDowCmp"></canvas></div>
+      </div>`;
+    _renderPDADowChart('pdaDow', curRows);
+    _renderPDADowChart('pdaDowCmp', cmpRows);
+  } else {
+    wrap.innerHTML = `
+      <div class="panel-header"><div><div class="panel-title">Performa per Hari Dalam Minggu</div>
+        <div class="panel-subtitle">Day-of-week analysis</div></div></div>
+      <div class="chart-wrap"><canvas id="pdaDow"></canvas></div>`;
+    _renderPDADowChart('pdaDow', curRows);
+  }
+}
+function _renderPDADowChart(canvasId, rows) {
   const agg = {}; for (let i = 0; i < 7; i++) agg[i] = { rev: 0, occ: 0, count: 0 };
-  // Pakai r.total (General Revenue) sebagai basis revenue per hari dalam minggu
-  rows.forEach(r => { const dt = ISOToDate(r.date); const dow = (dt.getDay()+6)%7; agg[dow].rev += r.total || 0; agg[dow].occ += r.occ; agg[dow].count++; });
+  rows.forEach(r => { const dt = ISOToDate(r.date); const dow = (dt.getDay() + 6) % 7; agg[dow].rev += r.total || 0; agg[dow].occ += r.occ; agg[dow].count++; });
   const avgRev = [], avgOcc = [];
-  for (let i = 0; i < 7; i++) { avgRev.push(agg[i].count ? agg[i].rev/agg[i].count : 0); avgOcc.push(agg[i].count ? agg[i].occ/agg[i].count : 0); }
-  makeChart('pdaDow', {
+  for (let i = 0; i < 7; i++) { avgRev.push(agg[i].count ? agg[i].rev / agg[i].count : 0); avgOcc.push(agg[i].count ? agg[i].occ / agg[i].count : 0); }
+  makeChart(canvasId, {
     type: 'bar',
     data: { labels: DOW_NAMES, datasets: [
       { label: 'Avg Revenue', data: avgRev, backgroundColor: '#007CFF', borderRadius: 4, yAxisID: 'y', valueLabelFormatter: v => FMT_RP_COMPACT(v), order: 2 },
-      { label: 'Avg Occupancy', data: avgOcc, type: 'line', borderColor: '#5BAAFF', backgroundColor: '#5BAAFF', borderWidth: 3, tension: 0.3, pointRadius: 5, pointBorderColor: '#FFFFFF', pointBorderWidth: 2, yAxisID: 'y1', skipValueLabels: true, order: 1 }
+      { label: 'Avg Occ', data: avgOcc, type: 'line', borderColor: '#5BAAFF', backgroundColor: '#5BAAFF', borderWidth: 2.5, tension: 0.3, pointRadius: 4, pointBorderColor: '#FFFFFF', pointBorderWidth: 2, yAxisID: 'y1', skipValueLabels: true, order: 1 }
     ]},
     options: {
-      responsive: true, maintainAspectRatio: false, layout: { padding: { top: 24 } },
+      responsive: true, maintainAspectRatio: false, layout: { padding: { top: 20 } },
       plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => ctx.datasetIndex === 0 ? `Avg Rev: ${FMT_RP(ctx.parsed.y)}` : `Avg Occ: ${ctx.parsed.y.toFixed(0)} kamar` } } },
       scales: {
         x: { grid: { display: false } },
@@ -1448,27 +1512,41 @@ function renderPendapatanOverall() {
   const cmpRows = state.cmp.enabled ? filterPenj(state.cmp.start, state.cmp.end) : [];
   const cur = aggregatePenjualan(curRows);
   const cmp = aggregatePenjualan(cmpRows);
-  
+  const hasCmp = state.cmp.enabled && cmpRows.length > 0;
+
+  // Pengunjung data for Spend calculation
+  const curPeng = filterPengunjung(state.cur.start, state.cur.end);
+  const cmpPeng = hasCmp ? filterPengunjung(state.cmp.start, state.cmp.end) : [];
+  const curPengAgg = aggregatePengunjung(curPeng);
+  const cmpPengAgg = aggregatePengunjung(cmpPeng);
+  // Pengunjung Ancol: cari unit yang namanya mengandung 'ancol'
+  const ancolUnit = [...new Set(state.pengunjungRaw.map(r => r.u))].find(u => u && u.toLowerCase().includes('ancol')) || '';
+  const curAncolQ = ancolUnit ? (curPengAgg.byUnit.get(ancolUnit) || 0) : 0;
+  const cmpAncolQ = ancolUnit ? (cmpPengAgg.byUnit.get(ancolUnit) || 0) : 0;
+
   // KPI cards
   const cards = [
-    { cls: '', label: 'TOTAL PENDAPATAN', curr: cur.revenue, prev: cmp.revenue, isCurrency: true },
-    { cls: 'green', label: 'TOTAL TRANSAKSI', curr: cur.visitors, prev: cmp.visitors, isCurrency: false, unit: 'transaksi' },
-    { cls: 'blue', label: 'AVG PER TRANSAKSI', curr: cur.visitors > 0 ? cur.revenue/cur.visitors : 0, prev: cmp.visitors > 0 ? cmp.revenue/cmp.visitors : 0, isCurrency: true },
-    { cls: 'amber', label: 'JUMLAH UNIT AKTIF', curr: cur.byUnit.size, prev: cmp.byUnit.size, isCurrency: false, unit: 'unit' },
+    { cls: '', label: 'TOTAL PENDAPATAN', curr: cur.revenue, prev: hasCmp ? cmp.revenue : null, isCurrency: true },
+    { cls: 'green', label: 'TOTAL TRANSAKSI', curr: cur.visitors, prev: hasCmp ? cmp.visitors : null, isCurrency: false, unit: 'transaksi' },
+    { cls: 'blue', label: 'SPEND PENGUNJUNG', curr: curPengAgg.total > 0 ? cur.revenue / curPengAgg.total : 0, prev: (hasCmp && cmpPengAgg.total > 0) ? cmp.revenue / cmpPengAgg.total : null, isCurrency: true },
+    { cls: 'teal', label: 'SPEND PENGUNJUNG ANCOL', curr: curAncolQ > 0 ? cur.revenue / curAncolQ : 0, prev: (hasCmp && cmpAncolQ > 0) ? cmp.revenue / cmpAncolQ : null, isCurrency: true },
+    { cls: 'amber', label: 'JUMLAH UNIT AKTIF', curr: cur.byUnit.size, prev: hasCmp ? cmp.byUnit.size : null, isCurrency: false, unit: 'unit' },
   ];
-  document.getElementById('pendapatanKpi').innerHTML = cards.map(c => renderKPICard(c)).join('');
+  const kpiGrid = document.getElementById('pendapatanKpi');
+  kpiGrid.innerHTML = cards.map(c => renderKPICard(c)).join('');
+  kpiGrid.className = 'kpi-grid cols-5';
 
   // Trend chart (daily revenue)
   const cs = dailySeriesInRange(curRows, state.cur.start, state.cur.end, 'r');
-  const datasets = [{ label: 'Periode Analisis', data: cs.values, borderColor: '#007CFF',
+  const trendDatasets = [{ label: 'Periode Analisis', data: cs.values, borderColor: '#007CFF',
     backgroundColor: ctx => { const g = ctx.chart.ctx.createLinearGradient(0,0,0,300); g.addColorStop(0, 'rgba(0,124,255,0.35)'); g.addColorStop(1, 'rgba(0,124,255,0)'); return g; },
     borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0 }];
-  if (state.cmp.enabled && cmpRows.length > 0) {
+  if (hasCmp) {
     const ps = dailySeriesInRange(cmpRows, state.cmp.start, state.cmp.end, 'r');
-    datasets.push({ label: 'Pembanding', data: ps.values, borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
+    trendDatasets.push({ label: 'Pembanding', data: ps.values, borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
   }
   makeChart('pendapatanTrend', {
-    type: 'line', data: { labels: cs.labels.map(FMT_DATE_SHORT), datasets },
+    type: 'line', data: { labels: cs.labels.map(FMT_DATE_SHORT), datasets: trendDatasets },
     options: {
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_RP(ctx.parsed.y)}` } } },
@@ -1476,38 +1554,42 @@ function renderPendapatanOverall() {
     }
   });
 
-  // Three pie charts: Platform, Jenis Tiket, Kelompok Jenis Tiket
-  renderPie('piePlatform', cur.byPlatform, 'Platform');
-  renderPie('pieJenis', cur.byJenis, 'Jenis Tiket');
-  renderPie('pieKelompok', cur.byKelompok, 'Kelompok');
+  // Pie charts: Platform, Jenis, Kelompok — dual when compare enabled
+  renderPiePair('piePlatformWrap', 'piePlatform', 'piePlatformCmp', cur.byPlatform, cmp.byPlatform, 'Pendapatan per Platform', hasCmp);
+  renderPiePair('pieJenisWrap', 'pieJenis', 'pieJenisCmp', cur.byJenis, cmp.byJenis, 'Pendapatan per Jenis Tiket', hasCmp);
+  renderPiePair('pieKelompokWrap', 'pieKelompok', 'pieKelompokCmp', cur.byKelompok, cmp.byKelompok, 'Pendapatan per Kelompok', hasCmp);
 
-  // Per-unit revenue bar
+  // Per-unit revenue bar — grouped compare
   const realUnits = getRealUnits();
   const tidakDitemukanRev = cur.byUnit.get(TIDAK_DITEMUKAN)?.revenue || 0;
-  const labels = realUnits.map(u => unitDisplayName(u));
-  const data = realUnits.map(u => cur.byUnit.get(u)?.revenue || 0);
-  if (tidakDitemukanRev > 0) { labels.push('Others'); data.push(tidakDitemukanRev); }
+  const tidakDitemukanRevCmp = cmp.byUnit.get(TIDAK_DITEMUKAN)?.revenue || 0;
+  const barLabels = realUnits.map(u => unitDisplayName(u));
+  const barData = realUnits.map(u => cur.byUnit.get(u)?.revenue || 0);
+  const barDataCmp = realUnits.map(u => cmp.byUnit.get(u)?.revenue || 0);
+  if (tidakDitemukanRev > 0 || tidakDitemukanRevCmp > 0) { barLabels.push('Others'); barData.push(tidakDitemukanRev); barDataCmp.push(tidakDitemukanRevCmp); }
+  const barDatasets = [{ label: 'Periode Analisis', data: barData, backgroundColor: '#007CFF', borderRadius: 4, valueLabelFormatter: v => FMT_RP_COMPACT(v) }];
+  if (hasCmp) barDatasets.push({ label: 'Pembanding', data: barDataCmp, backgroundColor: '#AEB2BE', borderRadius: 4, valueLabelFormatter: v => FMT_RP_COMPACT(v) });
   makeChart('pendapatanByUnit', {
-    type: 'bar', data: { labels, datasets: [{ label: 'Pendapatan', data, backgroundColor: '#007CFF', borderRadius: 4, valueLabelFormatter: v => FMT_RP_COMPACT(v) }] },
+    type: 'bar', data: { labels: barLabels, datasets: barDatasets },
     options: {
       responsive: true, maintainAspectRatio: false, layout: { padding: { top: 24 } },
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => FMT_RP(ctx.parsed.y) } } },
+      plugins: { legend: { position: 'top', align: 'end', display: hasCmp }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_RP(ctx.parsed.y)}` } } },
       scales: { x: { grid: { display: false } }, y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => 'Rp ' + FMT_COMPACT(v) } } }
     },
     plugins: [valueLabelsPlugin]
   });
 }
 
+// renderPie: single donut chart (re-usable)
 function renderPie(canvasId, mapData, _label) {
-  // Sort entries by value desc, take top 8 + "Lainnya"
   const entries = [...mapData.entries()].map(([k, v]) => ({ key: k, value: v.revenue }));
-  entries.sort((a,b) => b.value - a.value);
+  entries.sort((a, b) => b.value - a.value);
   const top = entries.slice(0, 8);
   const rest = entries.slice(8).reduce((a, e) => a + e.value, 0);
   const labels = top.map(e => e.key);
   const data = top.map(e => e.value);
   if (rest > 0) { labels.push('Lainnya'); data.push(rest); }
-  const total = data.reduce((a,b) => a+b, 0);
+  const total = data.reduce((a, b) => a + b, 0);
   makeChart(canvasId, {
     type: 'doughnut',
     data: { labels, datasets: [{ data, backgroundColor: PIE_COLORS, borderColor: '#FFFFFF', borderWidth: 2, hoverOffset: 8 }] },
@@ -1515,40 +1597,70 @@ function renderPie(canvasId, mapData, _label) {
       responsive: true, maintainAspectRatio: false, cutout: '55%',
       plugins: {
         legend: { position: 'bottom', labels: { boxWidth: 10, padding: 8, font: { size: 10 } } },
-        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${FMT_RP(ctx.parsed)} (${total>0 ? (ctx.parsed/total*100).toFixed(1) : 0}%)` } }
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${FMT_RP(ctx.parsed)} (${total > 0 ? (ctx.parsed / total * 100).toFixed(1) : 0}%)` } }
       }
     }
   });
+}
+// renderPiePair: renders 1 or 2 donuts into a wrapper panel depending on compare state
+function renderPiePair(wrapId, curId, cmpId, curMap, cmpMap, title, hasCmp) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  if (hasCmp) {
+    wrap.innerHTML = `
+      <div class="panel-header"><div><div class="panel-title">${title}</div>
+        <div class="panel-subtitle">Kiri: Analisis &middot; Kanan: Pembanding</div></div></div>
+      <div class="dual-chart-wrap" style="height:240px">
+        <div><div class="dual-chart-label">Periode Analisis</div><canvas id="${curId}"></canvas></div>
+        <div><div class="dual-chart-label">Pembanding</div><canvas id="${cmpId}"></canvas></div>
+      </div>`;
+    renderPie(curId, curMap, title);
+    renderPie(cmpId, cmpMap, title);
+  } else {
+    wrap.innerHTML = `
+      <div class="panel-header"><div><div class="panel-title">${title}</div>
+        <div class="panel-subtitle">All units</div></div></div>
+      <div class="chart-wrap"><canvas id="${curId}"></canvas></div>`;
+    renderPie(curId, curMap, title);
+  }
 }
 
 // ============ PER-UNIT PENDAPATAN SECTION ============
 function renderUnitPendapatan(unit, idx) {
   const slug = `unit_${idx}`;
-  const curUnit = filterPenj(state.cur.start, state.cur.end).filter(r => r.u === unit);
-  const cmpUnit = state.cmp.enabled ? filterPenj(state.cmp.start, state.cmp.end).filter(r => r.u === unit) : [];
+  // Filter tanpa unit filter (per-unit sudah spesifik)
+  const curUnit = state.penjRaw.filter(r => r.d >= state.cur.start && r.d <= state.cur.end && r.u === unit);
+  const cmpUnit = state.cmp.enabled ? state.penjRaw.filter(r => r.d >= state.cmp.start && r.d <= state.cmp.end && r.u === unit) : [];
   const cur = aggregatePenjualan(curUnit);
   const cmp = aggregatePenjualan(cmpUnit);
-  
+  const hasCmp = state.cmp.enabled && cmpUnit.length > 0;
+
+  // Pengunjung unit ini untuk Spend calculation
+  const curPengUnit = state.pengunjungRaw.filter(r => r.d >= state.cur.start && r.d <= state.cur.end && r.u === unit);
+  const cmpPengUnit = hasCmp ? state.pengunjungRaw.filter(r => r.d >= state.cmp.start && r.d <= state.cmp.end && r.u === unit) : [];
+  const curPengQ = curPengUnit.reduce((a, r) => a + r.q, 0);
+  const cmpPengQ = cmpPengUnit.reduce((a, r) => a + r.q, 0);
+
   // KPI
   const cards = [
-    { cls: '', label: 'PENDAPATAN', curr: cur.revenue, prev: cmp.revenue, isCurrency: true },
-    { cls: 'green', label: 'TRANSAKSI', curr: cur.visitors, prev: cmp.visitors, isCurrency: false, unit: 'transaksi' },
-    { cls: 'blue', label: 'AVG PER TRANSAKSI', curr: cur.visitors > 0 ? cur.revenue/cur.visitors : 0, prev: cmp.visitors > 0 ? cmp.revenue/cmp.visitors : 0, isCurrency: true },
+    { cls: '', label: 'PENDAPATAN', curr: cur.revenue, prev: hasCmp ? cmp.revenue : null, isCurrency: true },
+    { cls: 'green', label: 'TRANSAKSI', curr: cur.visitors, prev: hasCmp ? cmp.visitors : null, isCurrency: false, unit: 'transaksi' },
+    { cls: 'blue', label: 'SPEND PENGUNJUNG', curr: curPengQ > 0 ? cur.revenue / curPengQ : 0, prev: (hasCmp && cmpPengQ > 0) ? cmp.revenue / cmpPengQ : null, isCurrency: true },
   ];
   const kpiEl = document.getElementById(`${slug}_kpi`);
   if (kpiEl) kpiEl.innerHTML = cards.map(c => renderKPICard(c)).join('');
 
   // Trend
   const cs = dailySeriesInRange(curUnit, state.cur.start, state.cur.end, 'r');
-  const datasets = [{ label: 'Periode Analisis', data: cs.values, borderColor: '#007CFF',
+  const trendDatasets = [{ label: 'Periode Analisis', data: cs.values, borderColor: '#007CFF',
     backgroundColor: ctx => { const g = ctx.chart.ctx.createLinearGradient(0,0,0,300); g.addColorStop(0, 'rgba(0,124,255,0.3)'); g.addColorStop(1, 'rgba(0,124,255,0)'); return g; },
     borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0 }];
-  if (state.cmp.enabled && cmpUnit.length > 0) {
+  if (hasCmp) {
     const ps = dailySeriesInRange(cmpUnit, state.cmp.start, state.cmp.end, 'r');
-    datasets.push({ label: 'Pembanding', data: ps.values, borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
+    trendDatasets.push({ label: 'Pembanding', data: ps.values, borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
   }
   makeChart(`${slug}_trend`, {
-    type: 'line', data: { labels: cs.labels.map(FMT_DATE_SHORT), datasets },
+    type: 'line', data: { labels: cs.labels.map(FMT_DATE_SHORT), datasets: trendDatasets },
     options: {
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_RP(ctx.parsed.y)}` } } },
@@ -1556,10 +1668,10 @@ function renderUnitPendapatan(unit, idx) {
     }
   });
 
-  // Pies for this unit
-  renderPie(`${slug}_piePlatform`, cur.byPlatform, 'Platform');
-  renderPie(`${slug}_pieJenis`, cur.byJenis, 'Jenis Tiket');
-  renderPie(`${slug}_pieKelompok`, cur.byKelompok, 'Kelompok');
+  // Pie charts — dual when compare enabled
+  renderPiePair(`${slug}_piePlatformWrap`, `${slug}_piePlatform`, `${slug}_piePlatformCmp`, cur.byPlatform, cmp.byPlatform, 'Pendapatan per Platform', hasCmp);
+  renderPiePair(`${slug}_pieJenisWrap`, `${slug}_pieJenis`, `${slug}_pieJenisCmp`, cur.byJenis, cmp.byJenis, 'Pendapatan per Jenis Tiket', hasCmp);
+  renderPiePair(`${slug}_pieKelompokWrap`, `${slug}_pieKelompok`, `${slug}_pieKelompokCmp`, cur.byKelompok, cmp.byKelompok, 'Pendapatan per Kelompok', hasCmp);
 }
 
 // ============ PENGUNJUNG — data dari Database_Pengunjung (state.pengunjungRaw) ============
@@ -1568,14 +1680,14 @@ function renderPengunjungOverall() {
   const cmpRows = state.cmp.enabled ? filterPengunjung(state.cmp.start, state.cmp.end) : [];
   const cur = aggregatePengunjung(curRows);
   const cmp = aggregatePengunjung(cmpRows);
+  const hasCmp = state.cmp.enabled && cmpRows.length > 0;
 
   const realUnits = getRealUnitsFromPengunjung();
   const allUnits = [...realUnits];
-  // Tampilkan "Others" jika ada data TIDAK_DITEMUKAN di seluruh dataset (bukan hanya periode aktif)
   const tidakAda = state.pengunjungRaw.some(r => r.u === TIDAK_DITEMUKAN);
   if (tidakAda) allUnits.push(TIDAK_DITEMUKAN);
 
-  // KPI: per-unit saja (tanpa TOTAL PENGUNJUNG)
+  // KPI: per-unit
   const colorNames = ['amber', 'green', 'blue', 'purple', 'pink', 'teal', ''];
   const cards = [];
   allUnits.forEach((u, i) => {
@@ -1584,7 +1696,7 @@ function renderPengunjungOverall() {
       cls: colorNames[i % colorNames.length],
       label: displayLabel,
       curr: cur.byUnit.get(u) || 0,
-      prev: cmp.byUnit.get(u) || 0,
+      prev: hasCmp ? (cmp.byUnit.get(u) || 0) : null,
       isCurrency: false, unit: 'orang'
     });
   });
@@ -1592,29 +1704,53 @@ function renderPengunjungOverall() {
   const grid = document.getElementById('pengunjungKpi');
   grid.className = `kpi-grid cols-${cards.length <= 3 ? cards.length : cards.length <= 6 ? 3 : 4}`;
 
-  // Stacked bar harian per unit
+  // Line chart harian per unit — solid = periode analisis, dashed = pembanding
+  const LINE_COLORS = ['#004A99', '#007CFF', '#5BAAFF', '#0BAE54', '#F15C59', '#A3CFFF', '#AEB2BE'];
   const dates = [];
   let cd = ISOToDate(state.cur.start), endD = ISOToDate(state.cur.end);
   while (cd <= endD) { dates.push(dateToISO(cd)); cd = addDays(cd, 1); }
 
-  const colorList = ['#004A99', '#007CFF', '#007CFF', '#5BAAFF', '#A3CFFF', '#E7F2FF', '#AEB2BE'];
-  const datasets = allUnits.map((u, i) => {
-    const m = new Map();
-    curRows.filter(r => r.u === u).forEach(r => { m.set(r.d, (m.get(r.d) || 0) + r.q); });
-    return {
+  const datasets = [];
+  allUnits.forEach((u, i) => {
+    const color = LINE_COLORS[i % LINE_COLORS.length];
+    // Periode analisis — garis solid
+    const mCur = new Map();
+    curRows.filter(r => r.u === u).forEach(r => { mCur.set(r.d, (mCur.get(r.d) || 0) + r.q); });
+    datasets.push({
       label: unitDisplayName(u),
-      data: dates.map(d => m.get(d) || 0),
-      backgroundColor: colorList[i % colorList.length],
-      borderColor: colorList[i % colorList.length],
-      borderWidth: 0, stack: 'visitors'
-    };
+      data: dates.map(d => mCur.get(d) || 0),
+      borderColor: color, backgroundColor: 'transparent',
+      borderWidth: 2.5, tension: 0.3, pointRadius: 0, fill: false
+    });
+    // Periode pembanding — garis putus-putus
+    if (hasCmp) {
+      const cmpDates = [];
+      let cd2 = ISOToDate(state.cmp.start), ed2 = ISOToDate(state.cmp.end);
+      while (cd2 <= ed2) { cmpDates.push(dateToISO(cd2)); cd2 = addDays(cd2, 1); }
+      const mCmp = new Map();
+      cmpRows.filter(r => r.u === u).forEach(r => { mCmp.set(r.d, (mCmp.get(r.d) || 0) + r.q); });
+      // Map cmp ke index posisi yang sama dengan cur (hari ke-1, ke-2, dst.)
+      const cmpValues = dates.map((_, idx) => {
+        const cmpDate = cmpDates[idx];
+        return cmpDate ? (mCmp.get(cmpDate) || 0) : 0;
+      });
+      datasets.push({
+        label: unitDisplayName(u) + ' (Pembanding)',
+        data: cmpValues,
+        borderColor: color, backgroundColor: 'transparent',
+        borderWidth: 1.5, borderDash: [5, 4], tension: 0.3, pointRadius: 0, fill: false
+      });
+    }
   });
   makeChart('pengunjungTrend', {
-    type: 'bar', data: { labels: dates.map(FMT_DATE_SHORT), datasets },
+    type: 'line', data: { labels: dates.map(FMT_DATE_SHORT), datasets },
     options: {
       responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_NUM(ctx.parsed.y)} orang` } } },
-      scales: { x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 14 } }, y: { stacked: true, grid: { color: '#E7EBF5' }, ticks: { callback: v => FMT_COMPACT(v) } } }
+      plugins: {
+        legend: { position: 'top', align: 'end', labels: { boxWidth: 10, padding: 8, font: { size: 10 } } },
+        tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_NUM(ctx.parsed.y)} orang` } }
+      },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 14 } }, y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => FMT_COMPACT(v) } } }
     }
   });
 }
@@ -1679,20 +1815,11 @@ function buildPerUnitSections() {
           <div class="panel-header"><div><div class="panel-title">Tren Pendapatan Harian</div><div class="panel-subtitle">Daily revenue · ${displayName}</div></div></div>
           <div class="chart-wrap"><canvas id="${slug}_trend"></canvas></div>
         </div>
-        <div class="panel">
-          <div class="panel-header"><div><div class="panel-title">Pendapatan per Platform</div><div class="panel-subtitle">${displayName}</div></div></div>
-          <div class="chart-wrap"><canvas id="${slug}_piePlatform"></canvas></div>
-        </div>
+        <div class="panel" id="${slug}_piePlatformWrap"><!-- JS populated --></div>
       </div>
       <div class="row row-2">
-        <div class="panel">
-          <div class="panel-header"><div><div class="panel-title">Pendapatan per Jenis Tiket</div><div class="panel-subtitle">${displayName}</div></div></div>
-          <div class="chart-wrap"><canvas id="${slug}_pieJenis"></canvas></div>
-        </div>
-        <div class="panel">
-          <div class="panel-header"><div><div class="panel-title">Pendapatan per Kelompok Jenis Tiket</div><div class="panel-subtitle">${displayName}</div></div></div>
-          <div class="chart-wrap"><canvas id="${slug}_pieKelompok"></canvas></div>
-        </div>
+        <div class="panel" id="${slug}_pieJenisWrap"><!-- JS populated --></div>
+        <div class="panel" id="${slug}_pieKelompokWrap"><!-- JS populated --></div>
       </div>
     `;
   });
@@ -1721,6 +1848,48 @@ function buildPerUnitVisitorSections() {
     `;
   });
   document.getElementById('perUnitPengunjung').innerHTML = html;
+}
+
+// ============ UNIT FILTER ============
+function buildUnitFilterPills() {
+  // Kumpulkan semua unit unik dari penjualan + pengunjung
+  const allUnits = new Set();
+  state.penjRaw.forEach(r => { if (r.u && r.u !== TIDAK_DITEMUKAN) allUnits.add(r.u); });
+  state.pengunjungRaw.forEach(r => { if (r.u && r.u !== TIDAK_DITEMUKAN) allUnits.add(r.u); });
+  const sortedUnits = [...allUnits].sort((a, b) => {
+    const ai = UNIT_ORDER.indexOf(a), bi = UNIT_ORDER.indexOf(b);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1; if (bi >= 0) return 1;
+    return a.localeCompare(b);
+  });
+  const container = document.getElementById('unitFilterPills');
+  if (!container) return;
+  const allActive = state.selectedUnits.size === 0;
+  let html = `<span class="unit-pill all-pill ${allActive ? 'active' : ''}" data-unit="__all__">Semua Unit</span>`;
+  sortedUnits.forEach(u => {
+    const active = state.selectedUnits.has(u);
+    html += `<span class="unit-pill ${active ? 'active' : ''}" data-unit="${u}">${unitDisplayName(u)}</span>`;
+  });
+  container.innerHTML = html;
+  container.querySelectorAll('.unit-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const u = pill.dataset.unit;
+      if (u === '__all__') {
+        state.selectedUnits.clear();
+      } else {
+        if (state.selectedUnits.has(u)) state.selectedUnits.delete(u);
+        else state.selectedUnits.add(u);
+      }
+      buildUnitFilterPills(); // re-render pills
+      if (state.penjRaw.length > 0) {
+        renderPendapatanOverall();
+        const units = getRealUnits();
+        units.forEach((unit, i) => renderUnitPendapatan(unit, i));
+        renderPengunjungOverall();
+        units.forEach((unit, i) => renderUnitPengunjung(unit, i));
+      }
+    });
+  });
 }
 
 // ============ MAIN RENDER ============
@@ -1774,6 +1943,7 @@ function applyPresetToDraft(key) {
   const anchor = state.dataMax ? ISOToDate(state.dataMax) : new Date();
   let start, end;
   switch(key) {
+    case 'jan_2026': start = new Date(2026, 0, 1); end = new Date(2026, 0, 31); break;
     case 'today': start = end = anchor; break;
     case 'yesterday': start = end = addDays(anchor, -1); break;
     case 'this_week_sun': start = startOfWeekSunday(anchor); end = anchor; break;
@@ -1811,7 +1981,8 @@ function recomputeDraftCompare() {
 }
 function buildPresetList() {
   const presets = [
-    { key: 'custom', label: 'Custom' }, { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' },
+    { key: 'custom', label: 'Custom' }, { key: 'jan_2026', label: 'Januari 2026' },
+    { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' },
     { key: 'this_week_sun', label: 'This week (Sun - Today)' }, { key: 'last7', label: 'Last 7 days' },
     { key: 'last_week_sun_sat', label: 'Last week (Sun - Sat)' }, { key: 'last28', label: 'Last 28 days' },
     { key: 'last30', label: 'Last 30 days' }, { key: 'this_month', label: 'This month' },
@@ -1935,7 +2106,7 @@ async function exportToPDF() {
 
     // Sembunyikan elemen UI yang tidak boleh ikut di PDF (sebagai safety net
     // tambahan di luar CSS pdf-mode, untuk elemen yg posisinya fixed/absolute).
-    const toHide = document.querySelectorAll('.export-bar, .pdf-overlay, .toast, .date-popover, .date-popover-backdrop, .status-bar, .date-picker-bar');
+    const toHide = document.querySelectorAll('.export-bar, .pdf-overlay, .toast, .date-popover, .date-popover-backdrop, .status-bar, .date-picker-bar, .unit-filter-bar');
     toHide.forEach(el => {
       if (el.id === 'pdfOverlay') return; // overlay tetap visible buat status user
       tempHidden.push({ el, display: el.style.display });
@@ -2107,6 +2278,7 @@ document.getElementById('refreshAllBtn').addEventListener('click', async () => {
   // Rebuild section DOMs in case unit list changed
   buildPerUnitSections();
   buildPerUnitVisitorSections();
+  buildUnitFilterPills();
   renderAll();
   btn.disabled = false;
 });
@@ -2151,9 +2323,10 @@ buildPresetList();
   // No fallback for pengunjung - it should load from spreadsheet
   
   recomputeDataRange();
-  applyPreset('last28');
+  applyPreset('jan_2026');
   buildPerUnitSections();
   buildPerUnitVisitorSections();
+  buildUnitFilterPills();
   renderAll();
   setStatus('pda', state.pdaRaw === PDA_FALLBACK ? 'cached' : 'cached', state.pdaRaw === PDA_FALLBACK ? 'PDA · DEMO' : 'PDA · CACHED');
   setStatus('penj', state.penjRaw === PENJ_FALLBACK ? 'cached' : 'cached', state.penjRaw === PENJ_FALLBACK ? 'PENJUALAN · DEMO' : 'PENJUALAN · CACHED');
@@ -2163,9 +2336,10 @@ buildPresetList();
   const [okPda, okPenj, okPengunjung] = await Promise.all([loadPDA(true), loadPenjualan(true), loadPengunjung(true)]);
   if (okPda || okPenj || okPengunjung) {
     recomputeDataRange();
-    applyPreset(state.cur.presetKey || 'last28');
+    applyPreset(state.cur.presetKey || 'jan_2026');
     buildPerUnitSections();
     buildPerUnitVisitorSections();
+    buildUnitFilterPills();
     renderAll();
   }
 })();
