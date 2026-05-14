@@ -1843,22 +1843,24 @@ function buildPerUnitSections() {
     const slug = `unit_${idx}`;
     const displayName = unitDisplayName(unit);
     html += `
-      <div class="section-header pendapatan-section">
-        <span class="section-num">UNIT ${idx+1}</span>
-        <h2 class="section-title">${displayName} <em>· Pendapatan</em></h2>
-        <div class="section-subtitle">${unit}</div>
-      </div>
-      <div class="kpi-grid cols-3" id="${slug}_kpi"></div>
-      <div class="row row-2">
-        <div class="panel">
-          <div class="panel-header"><div><div class="panel-title">Tren Pendapatan Harian</div><div class="panel-subtitle">Daily revenue · ${displayName}</div></div></div>
-          <div class="chart-wrap"><canvas id="${slug}_trend"></canvas></div>
+      <div class="unit-section-block" id="${slug}_section" data-unit="${unit}">
+        <div class="section-header pendapatan-section">
+          <span class="section-num">UNIT ${idx+1}</span>
+          <h2 class="section-title">${displayName} <em>&middot; Pendapatan</em></h2>
+          <div class="section-subtitle">${unit}</div>
         </div>
-        <div class="panel" id="${slug}_piePlatformWrap"><!-- JS populated --></div>
-      </div>
-      <div class="row row-2">
-        <div class="panel" id="${slug}_pieJenisWrap"><!-- JS populated --></div>
-        <div class="panel" id="${slug}_pieKelompokWrap"><!-- JS populated --></div>
+        <div class="kpi-grid cols-3" id="${slug}_kpi"></div>
+        <div class="row row-2">
+          <div class="panel">
+            <div class="panel-header"><div><div class="panel-title">Tren Pendapatan Harian</div><div class="panel-subtitle">Daily revenue &middot; ${displayName}</div></div></div>
+            <div class="chart-wrap"><canvas id="${slug}_trend"></canvas></div>
+          </div>
+          <div class="panel" id="${slug}_piePlatformWrap"><!-- JS populated --></div>
+        </div>
+        <div class="row row-2">
+          <div class="panel" id="${slug}_pieJenisWrap"><!-- JS populated --></div>
+          <div class="panel" id="${slug}_pieKelompokWrap"><!-- JS populated --></div>
+        </div>
       </div>
     `;
   });
@@ -1872,16 +1874,18 @@ function buildPerUnitVisitorSections() {
     const slug = `unitvis_${idx}`;
     const displayName = unitDisplayName(unit);
     html += `
-      <div class="section-header pengunjung-section">
-        <span class="section-num">UNIT ${idx+1}</span>
-        <h2 class="section-title">${displayName} <em>· Pengunjung</em></h2>
-        <div class="section-subtitle">${unit}</div>
-      </div>
-      <div class="kpi-grid cols-2" id="${slug}_kpi"></div>
-      <div class="row row-1">
-        <div class="panel">
-          <div class="panel-header"><div><div class="panel-title">Tren Pengunjung Harian</div><div class="panel-subtitle">Daily visitors · ${displayName}</div></div></div>
-          <div class="chart-wrap"><canvas id="${slug}_trend"></canvas></div>
+      <div class="unit-section-block" id="${slug}_section" data-unit="${unit}">
+        <div class="section-header pengunjung-section">
+          <span class="section-num">UNIT ${idx+1}</span>
+          <h2 class="section-title">${displayName} <em>&middot; Pengunjung</em></h2>
+          <div class="section-subtitle">${unit}</div>
+        </div>
+        <div class="kpi-grid cols-2" id="${slug}_kpi"></div>
+        <div class="row row-1">
+          <div class="panel">
+            <div class="panel-header"><div><div class="panel-title">Tren Pengunjung Harian</div><div class="panel-subtitle">Daily visitors &middot; ${displayName}</div></div></div>
+            <div class="chart-wrap"><canvas id="${slug}_trend"></canvas></div>
+          </div>
         </div>
       </div>
     `;
@@ -1949,7 +1953,20 @@ function _rerenderFilteredSections() {
     units.forEach((unit, i) => renderUnitPendapatan(unit, i));
     renderPengunjungOverall();
     units.forEach((unit, i) => renderUnitPengunjung(unit, i));
+    updateUnitSectionVisibility();
   }
+}
+function updateUnitSectionVisibility() {
+  // Sembunyikan per-unit Pendapatan block yg tidak dipilih
+  document.querySelectorAll('#perUnitPendapatan .unit-section-block').forEach(el => {
+    const u = el.dataset.unit;
+    el.style.display = (state.selectedUnits.size > 0 && !state.selectedUnits.has(u)) ? 'none' : '';
+  });
+  // Sembunyikan per-unit Pengunjung block yg tidak dipilih
+  document.querySelectorAll('#perUnitPengunjung .unit-section-block').forEach(el => {
+    const u = el.dataset.unit;
+    el.style.display = (state.selectedUnits.size > 0 && !state.selectedUnits.has(u)) ? 'none' : '';
+  });
 }
 
 // ============ MAIN RENDER ============
@@ -1965,6 +1982,7 @@ function renderAll() {
     realUnits.forEach((u, i) => renderUnitPendapatan(u, i));
     renderPengunjungOverall();
     realUnits.forEach((u, i) => renderUnitPengunjung(u, i));
+    updateUnitSectionVisibility();
   }
 }
 
