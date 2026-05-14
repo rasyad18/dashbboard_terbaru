@@ -1,0 +1,2175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ancol Performance Dashboard — Unified</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600;700;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+
+:root {
+  /* === TIKET.COM TDS LIGHT MODE ===
+     Background light, biru #007CFF (B400) sebagai primary interactive, neutral scale untuk text.
+     No yellow per permintaan — fokus biru + neutral untuk look bersih & modern. */
+
+  /* Backgrounds: terbalik dari dark mode. N100 utama, N0 putih untuk card */
+  --bg: #F4F7FE;              /* N100 — soft tinted white page bg */
+  --bg-card: #FFFFFF;         /* N0 — pure white untuk panel & kartu */
+  --bg-card-hover: #F4F7FE;
+  --bg-elevated: #FFFFFF;
+  /* Border halus untuk light mode */
+  --border: #E7EBF5;
+  --border-light: #D8DCE8;    /* N200 */
+  /* Text scale tiket.com */
+  --text: #303135;            /* N800 — high emphasis */
+  --text-dim: #71747D;        /* N600 — low emphasis */
+  --text-faint: #AEB2BE;      /* N400 — disabled / sangat samar */
+  /* === Biru Tiket TDS — primary interactive === */
+  --accent: #007CFF;          /* B400 — primary interactive (button, link, accent) */
+  --accent-bright: #5BAAFF;   /* B300 — variant */
+  --tiket-blue: #007CFF;
+  --tiket-blue-light: #5BAAFF;
+  --tiket-blue-pale: #A3CFFF; /* B200 */
+  --tiket-blue-bg: #E7F2FF;   /* B100 — background tipis */
+  /* === Mapping ke nama Ancol lama supaya CSS section identitas tetap kerja === */
+  --ancol-deep: #004A99;      /* Deep version of B400 */
+  --ancol-ocean: #007CFF;     /* = primary */
+  --ancol-royal: #007CFF;
+  --ancol-bright: #5BAAFF;
+  --ancol-sky: #5BAAFF;
+  --ancol-pale: #A3CFFF;
+  --ancol-mist: #E7F2FF;
+  /* Champagne aliases dipertahankan untuk kompatibilitas (tidak dipakai di light mode) */
+  --champagne: #007CFF;
+  --champagne-bright: #5BAAFF;
+  --champagne-deep: #004A99;
+  /* Pembanding: pakai N600 abu (putih tidak kerja di light bg) */
+  --compare: #71747D;
+  /* Delta tiket.com */
+  --green: #0BAE54;           /* G500 */
+  --green-bg: #E2FBED;        /* G100 */
+  --red: #F15C59;             /* R400 */
+  --red-bg: #FFDFDF;          /* R100 */
+  /* Legacy aliases ke palette biru tiket */
+  --blue: #007CFF; --purple: #007CFF; --amber: #5BAAFF; --teal: #A3CFFF; --pink: #5BAAFF;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 124, 255, 0.04), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 10%, rgba(91, 170, 255, 0.03), transparent),
+    var(--bg);
+  min-height: 100vh; padding: 32px 40px 60px;
+}
+
+/* HEADER */
+.header {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 24px; position: relative;
+}
+.header::after {
+  content: ''; position: absolute; bottom: -1px; left: 0; width: 120px; height: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+.brand { display: flex; flex-direction: column; gap: 4px; }
+.brand-tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--champagne); letter-spacing: 2.5px; text-transform: uppercase; }
+.brand-title { font-family: 'Fraunces', serif; font-weight: 500; font-size: 38px; letter-spacing: -1px; line-height: 1; color: var(--text); }
+.brand-title em { font-style: normal; color: var(--champagne); font-weight: 400; }
+.brand-subtitle { font-size: 13px; color: var(--text-dim); margin-top: 6px; letter-spacing: 0.3px; }
+.header-meta { text-align: right; }
+.header-meta .label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 1.5px; text-transform: uppercase; }
+.header-meta .value { font-family: 'Fraunces', serif; font-size: 22px; color: var(--text); margin-top: 2px; }
+.header-meta .range { font-size: 12px; color: var(--text-dim); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+
+/* STATUS BAR */
+.status-bar {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  background: var(--bg-card); border: 1px solid var(--border);
+  padding: 14px 18px; border-radius: 10px; margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(48,49,53,0.04);
+}
+.status-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 6px 12px; border-radius: 16px;
+  background: var(--bg); border: 1px solid var(--border-light);
+}
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); }
+.status-dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+.status-dot.cached { background: var(--amber); }
+.status-dot.error { background: var(--red); }
+.status-dot.loading { background: var(--blue); animation: pulse 1s infinite; }
+.status-pill.live { color: var(--green); border-color: rgba(11,174,84,0.3); background: var(--green-bg); }
+.status-pill.cached { color: var(--accent); border-color: var(--tiket-blue-pale); background: var(--tiket-blue-bg); }
+.status-pill.error { color: var(--red); border-color: rgba(241,92,89,0.3); background: var(--red-bg); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.refresh-btn {
+  background: transparent; border: 1px solid var(--border-light); color: var(--text-dim);
+  padding: 8px 16px; border-radius: 6px; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  letter-spacing: 1px; font-weight: 600; transition: all 0.15s; margin-left: auto;
+}
+.refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+.refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* DATE PICKER (LOOKER) */
+.date-picker-bar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: var(--bg-card); border: 1px solid var(--border);
+  padding: 16px 20px; border-radius: 10px; margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(48,49,53,0.04);
+}
+.date-picker-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); letter-spacing: 1.5px; text-transform: uppercase; }
+.date-trigger {
+  background: var(--bg); border: 1px solid var(--border-light); color: var(--text);
+  padding: 9px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 10px;
+  transition: all 0.15s; min-width: 280px; justify-content: space-between;
+}
+.date-trigger:hover { border-color: var(--accent); }
+.date-trigger.open { border-color: var(--accent); }
+.date-trigger .preset-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--accent); background: rgba(0,124,255,0.1); padding: 2px 7px; border-radius: 10px; }
+.date-trigger .arrow { color: var(--text-dim); font-size: 10px; transition: transform 0.2s; }
+.date-trigger.open .arrow { transform: rotate(180deg); }
+.date-trigger .range-text { color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+.date-popover-backdrop { position: fixed; inset: 0; background: transparent; z-index: 100; display: none; }
+.date-popover-backdrop.open { display: block; }
+.date-popover {
+  position: absolute; z-index: 101; background: var(--bg-elevated);
+  border: 1px solid var(--border-light); border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(48,49,53,0.18);
+  padding: 0; display: none; overflow: hidden; width: 640px;
+}
+.date-popover.open { display: flex; }
+.date-popover-presets {
+  width: 220px; background: var(--bg-card); border-right: 1px solid var(--border);
+  padding: 8px 0; max-height: 540px; overflow-y: auto;
+}
+.preset-item { padding: 9px 18px; cursor: pointer; font-size: 13px; color: var(--text); transition: background 0.1s; }
+.preset-item:hover { background: var(--bg); }
+.preset-item.active { background: var(--tiket-blue-bg); color: var(--accent); font-weight: 600; }
+.date-popover-main { flex: 1; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.date-input-row { display: flex; gap: 10px; align-items: end; }
+.date-input-group { flex: 1; display: flex; flex-direction: column; gap: 5px; position: relative; }
+.date-input-group label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; font-weight: 500; }
+.date-input-group input {
+  background: var(--bg-card); border: 1px solid var(--border-light);
+  color: var(--text); padding: 8px 10px; border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  color-scheme: light;
+}
+.date-input-group input:hover { border-color: var(--tiket-blue-pale); }
+.date-input-group input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,124,255,0.15);
+}
+/* Ikon kalender custom: stroke gelap (text-dim) untuk light mode */
+.date-input-group input {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371747D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px 16px;
+  padding-right: 36px !important;
+}
+.date-input-group input:hover {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23007CFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>");
+}
+.date-input-group input::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  width: 36px;
+  height: 100%;
+  cursor: pointer;
+}
+.date-input-dash { color: var(--text-faint); padding-bottom: 9px; font-weight: 600; }
+.compare-toggle-row { display: flex; align-items: center; gap: 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+.compare-toggle-row .label-text { font-size: 13px; color: var(--text); font-weight: 500; }
+.toggle-switch { position: relative; width: 38px; height: 22px; background: var(--border-light); border-radius: 11px; cursor: pointer; transition: background 0.2s; }
+.toggle-switch.on { background: var(--accent); }
+.toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #FFFFFF; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(48,49,53,0.15); }
+.toggle-switch.on::after { transform: translateX(16px); background: var(--bg); }
+.compare-mode-select {
+  background: var(--bg); border: 1px solid var(--border-light); color: var(--text);
+  padding: 7px 10px; border-radius: 5px; font-size: 12.5px; cursor: pointer; flex: 1;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%238a99ad' stroke-width='1.5' fill='none'/></svg>");
+  background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px;
+}
+.popover-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+.pf-btn { padding: 7px 16px; border-radius: 5px; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 1px; font-weight: 600; border: 1px solid var(--border-light); background: transparent; color: var(--text-dim); transition: all 0.15s; }
+.pf-btn:hover { border-color: var(--accent); color: var(--accent); }
+.pf-btn.primary { background: var(--accent); color: #FFFFFF; border-color: var(--accent); }
+.pf-btn.primary:hover { background: var(--accent-bright); color: #FFFFFF; }
+
+/* EXPORT BAR */
+.export-bar { display: flex; gap: 10px; justify-content: flex-end; margin-bottom: 16px; }
+.export-btn {
+  background: linear-gradient(135deg, var(--accent), var(--accent-bright)); border: none; color: #FFFFFF;
+  padding: 10px 18px; border-radius: 8px; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 1.5px; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,124,255,0.25);
+}
+.export-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,124,255,0.4); }
+.export-btn:disabled { opacity: 0.6; cursor: wait; transform: none; }
+
+.compare-summary {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 18px; margin-bottom: 24px;
+  display: flex; align-items: center; gap: 14px; justify-content: center; flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim);
+  box-shadow: 0 1px 3px rgba(48,49,53,0.04);
+}
+.compare-summary .vs { color: var(--accent); font-weight: 600; padding: 0 4px; }
+.compare-summary strong { color: var(--text); }
+
+/* SECTION HEADER */
+.section-header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 24px; margin: 32px 0 18px;
+  background: linear-gradient(90deg, rgba(0,124,255,0.08), transparent);
+  border-left: 4px solid var(--accent); border-radius: 4px;
+  position: relative;
+}
+.section-header.unit-section { border-left-color: var(--accent); }
+/* Section identitas dalam keluarga biru laut Ancol — masing-masing pakai shade berbeda
+   supaya tetap mudah dibedakan tanpa keluar dari brand tone. */
+.section-header.pendapatan-section { border-left-color: var(--ancol-royal); background: linear-gradient(90deg, rgba(0,124,255,0.10), transparent); }
+.section-header.pengunjung-section { border-left-color: var(--ancol-sky); background: linear-gradient(90deg, rgba(91,170,255,0.10), transparent); }
+.section-header.pda-section { border-left-color: var(--ancol-ocean); background: linear-gradient(90deg, rgba(0,124,255,0.18), transparent); }
+.section-num {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent);
+  background: var(--tiket-blue-bg); border: 1px solid var(--tiket-blue-pale);
+  padding: 4px 11px; border-radius: 3px; letter-spacing: 2px; font-weight: 600;
+}
+.section-title { font-family: 'Fraunces', serif; font-weight: 500; font-size: 24px; color: var(--text); letter-spacing: -0.5px; }
+.section-title em { font-style: normal; color: var(--accent); font-weight: 500; }
+.section-subtitle { font-size: 12px; color: var(--text-dim); margin-left: auto; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px; }
+
+/* KPI CARDS */
+.kpi-grid { display: grid; gap: 16px; margin-bottom: 24px; }
+.kpi-grid.cols-6 { grid-template-columns: repeat(6, 1fr); }
+.kpi-grid.cols-5 { grid-template-columns: repeat(5, 1fr); }
+.kpi-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.kpi-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.kpi-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.kpi-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; position: relative; overflow: hidden;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(48,49,53,0.04);
+}
+.kpi-card:hover {
+  border-color: var(--tiket-blue-pale);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,124,255,0.10);
+}
+.kpi-card::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.kpi-card:hover::before { opacity: 1; }
+.kpi-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px; font-weight: 500; }
+.kpi-value { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; line-height: 1.15; color: var(--text); letter-spacing: -0.3px; word-break: break-word; }
+.kpi-currency, .kpi-unit { font-size: 13px; color: var(--text-dim); font-family: 'Inter', sans-serif; font-weight: 400; }
+.kpi-currency {
+  margin-right: 4px;
+  font-family: 'Inter', sans-serif;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+.kpi-prev { font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; margin-top: 6px; }
+.kpi-compare { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; }
+.kpi-delta { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 11px; }
+.kpi-delta.up { background: var(--green-bg); color: var(--green); }
+.kpi-delta.down { background: var(--red-bg); color: var(--red); }
+.kpi-vs { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+
+/* PANELS */
+.row { display: grid; gap: 20px; margin-bottom: 20px; }
+.row-2 { grid-template-columns: 1.6fr 1fr; }
+.row-1 { grid-template-columns: 1fr; }
+.row-3-pies { grid-template-columns: 1fr 1fr 1fr; }
+.panel {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 22px;
+  box-shadow: 0 1px 3px rgba(48,49,53,0.04);
+}
+.panel-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.panel-title { font-family: 'Fraunces', serif; font-weight: 500; font-size: 18px; color: var(--text); letter-spacing: -0.3px; }
+.panel-subtitle { font-size: 12px; color: var(--text-dim); margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
+.panel-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.metric-pill { background: var(--bg); border: 1px solid var(--border-light); color: var(--text-dim); padding: 5px 11px; border-radius: 14px; font-family: 'JetBrains Mono', monospace; font-size: 10px; cursor: pointer; transition: all 0.15s; }
+.metric-pill:hover { border-color: var(--accent); color: var(--text); }
+.metric-pill.active { background: var(--accent); color: #FFFFFF; border-color: var(--accent); }
+.chart-wrap { position: relative; height: 320px; }
+.chart-wrap.tall { height: 360px; }
+.chart-wrap.short { height: 260px; }
+
+/* INSIGHTS */
+.insights {
+  background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(48,49,53,0.04);
+}
+.insights-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 2.5px; text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.insights-list { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.insight-item { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; background: var(--bg); border-radius: 8px; border-left: 2px solid var(--accent); }
+.insight-item.positive { border-left-color: var(--green); }
+.insight-item.negative { border-left-color: var(--red); }
+.insight-item.warning { border-left-color: var(--amber); }
+.insight-icon { font-family: 'Fraunces', serif; font-size: 22px; line-height: 1; color: var(--accent); flex-shrink: 0; margin-top: -2px; }
+.insight-item.positive .insight-icon { color: var(--green); }
+.insight-item.negative .insight-icon { color: var(--red); }
+.insight-item.warning .insight-icon { color: var(--amber); }
+.insight-content h4 { font-family: 'Fraunces', serif; font-weight: 500; font-size: 15px; color: var(--text); margin-bottom: 4px; }
+.insight-content p { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+.insight-content strong { color: var(--text); font-weight: 600; }
+
+/* TABLE */
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.data-table th { text-align: left; padding: 10px 10px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border); font-weight: 600; }
+.data-table th.num, .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table td { padding: 10px 10px; color: var(--text); border-bottom: 1px solid var(--border); white-space: nowrap; }
+.data-table tr:hover td { background: var(--bg-card-hover); }
+.data-table .month, .data-table .name { font-family: 'Fraunces', serif; font-weight: 500; color: var(--accent); }
+.table-wrap { max-height: 380px; overflow: auto; }
+.delta-cell { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 10.5px; }
+.delta-cell.up { color: var(--green); }
+.delta-cell.down { color: var(--red); }
+
+/* TOAST + LOADING */
+.toast { position: fixed; bottom: 30px; right: 30px; background: var(--bg-card); border: 1px solid var(--border-light); border-left: 3px solid var(--accent); padding: 14px 20px; border-radius: 8px; font-size: 13px; color: var(--text); box-shadow: 0 8px 24px rgba(48,49,53,0.12); transform: translateX(500px); transition: transform 0.3s; z-index: 1000; max-width: 480px; line-height: 1.5; }
+.toast.show { transform: translateX(0); }
+.toast.success { border-left-color: var(--green); }
+.toast.error { border-left-color: var(--red); }
+.toast.info { border-left-color: var(--blue); }
+.pdf-overlay { position: fixed; inset: 0; background: rgba(48,49,53,0.65); z-index: 9999; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.pdf-overlay.show { display: flex; }
+.pdf-overlay-content {
+  text-align: center; max-width: 360px;
+  background: var(--bg-card); padding: 32px 28px;
+  border-radius: 12px; border: 1px solid var(--border);
+  box-shadow: 0 20px 60px rgba(48,49,53,0.25);
+}
+.pdf-overlay-content .spinner { width: 48px; height: 48px; margin: 0 auto 20px; border: 3px solid var(--border-light); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.pdf-overlay-content h3 { font-family: 'Fraunces', serif; font-size: 22px; color: var(--text); margin-bottom: 8px; font-weight: 500; }
+.pdf-overlay-content p { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); }
+
+/* PDF MODE — saat export, sembunyikan UI controls (tombol, popover, toast).
+   Capture langsung dari DOM live, jadi tidak perlu lagi clone container.
+   Aturan ini cuma untuk hide elemen interaktif & memastikan chart tidak berubah ukuran. */
+body.pdf-mode .status-bar,
+body.pdf-mode .date-picker-bar,
+body.pdf-mode .export-bar,
+body.pdf-mode .toast,
+body.pdf-mode .date-popover,
+body.pdf-mode .date-popover-backdrop { display: none !important; }
+/* Pastikan canvas chart tidak nge-collapse ke 0 saat di-capture html2canvas.
+   chart-wrap punya tinggi tetap, jadi ini lebih sebagai safety net. */
+body.pdf-mode .chart-wrap canvas { max-width: 100% !important; }
+
+/* RESPONSIVE */
+@media (max-width: 1280px) {
+  .kpi-grid.cols-6 { grid-template-columns: repeat(3, 1fr); }
+  .kpi-grid.cols-5 { grid-template-columns: repeat(3, 1fr); }
+  .kpi-grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 1024px) {
+  .row-2, .row-3-pies { grid-template-columns: 1fr; }
+  .insights-list { grid-template-columns: 1fr; }
+  .date-popover { width: 95vw; max-width: 540px; flex-direction: column; }
+  .date-popover-presets { width: 100%; max-height: 200px; border-right: none; border-bottom: 1px solid var(--border); }
+}
+@media (max-width: 700px) {
+  body { padding: 16px; }
+  .kpi-grid.cols-6, .kpi-grid.cols-5, .kpi-grid.cols-4, .kpi-grid.cols-3 { grid-template-columns: repeat(2, 1fr); }
+  .header { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .header-meta { text-align: left; }
+  .brand-title { font-size: 28px; }
+  .date-trigger { min-width: 0; width: 100%; }
+}
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <div class="brand-tag">— Ancol Performance</div>
+    <h1 class="brand-title">Unified <em>Dashboard</em></h1>
+    <div class="brand-subtitle">PDA · Pendapatan · Pengunjung — All synced from Google Sheets</div>
+  </div>
+  <div class="header-meta">
+    <div class="label">Reporting Window</div>
+    <div class="value" id="dateRangeText">—</div>
+    <div class="range" id="daysCountText">—</div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="status-pill" id="pdaStatus"><div class="status-dot"></div><span class="status-text">PDA · INIT</span></div>
+  <div class="status-pill" id="penjStatus"><div class="status-dot"></div><span class="status-text">PENJUALAN · INIT</span></div>
+  <div class="status-pill" id="pengunjungStatus"><div class="status-dot"></div><span class="status-text">PENGUNJUNG · INIT</span></div>
+  <button class="refresh-btn" id="refreshAllBtn">↻ REFRESH ALL</button>
+</div>
+
+<div class="date-picker-bar">
+  <span class="date-picker-label">Periode:</span>
+  <button class="date-trigger" id="dateTrigger"><span id="dateTriggerInner"></span></button>
+  <span class="date-picker-label" style="margin-left:auto">Klik untuk mengubah preset & periode pembanding</span>
+</div>
+
+<div class="date-popover-backdrop" id="popoverBackdrop"></div>
+<div class="date-popover" id="datePopover">
+  <div class="date-popover-presets" id="presetList"></div>
+  <div class="date-popover-main">
+    <div class="date-input-row">
+      <div class="date-input-group"><label>Start date</label><input type="date" id="curStartInput"></div>
+      <span class="date-input-dash">—</span>
+      <div class="date-input-group"><label>End date</label><input type="date" id="curEndInput"></div>
+    </div>
+    <div class="compare-toggle-row">
+      <span class="label-text">Compare</span>
+      <div class="toggle-switch" id="compareToggle"></div>
+      <select class="compare-mode-select" id="compareModeSelect">
+        <option value="previous_period">Previous period</option>
+        <option value="previous_year">Previous year</option>
+        <option value="previous_year_match_dow">Previous year (match day of week)</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    <div class="date-input-row">
+      <div class="date-input-group"><label>Compare Start</label><input type="date" id="cmpStartInput"></div>
+      <span class="date-input-dash">—</span>
+      <div class="date-input-group"><label>Compare End</label><input type="date" id="cmpEndInput"></div>
+    </div>
+    <div class="popover-footer">
+      <button class="pf-btn" id="cancelBtn">CANCEL</button>
+      <button class="pf-btn primary" id="applyBtn">APPLY</button>
+    </div>
+  </div>
+</div>
+
+<div class="export-bar">
+  <button class="export-btn" id="exportPdfBtn"><span>📄</span><span>EXPORT PDF</span></button>
+</div>
+
+<div class="compare-summary" id="compareSummary">—</div>
+
+<!-- ========== SECTION 1: PDA HOTEL ========== -->
+<div class="section-header pda-section">
+  <span class="section-num">SECTION 1</span>
+  <h2 class="section-title">PDA <em>Hotel & F&B</em></h2>
+  <div class="section-subtitle">Pembangunan Jaya Ancol</div>
+</div>
+<div class="kpi-grid cols-6" id="pdaKpi"></div>
+<div class="insights"><div class="insights-title">◆ PDA Insights</div><div class="insights-list" id="pdaInsights"></div></div>
+<div class="row row-2">
+  <div class="panel">
+    <div class="panel-header">
+      <div><div class="panel-title">Tren Revenue Harian</div><div class="panel-subtitle">PDA daily revenue</div></div>
+      <div class="panel-actions" id="pdaTrendMetricPills">
+        <button class="metric-pill active" data-metric="total">TOTAL</button>
+        <button class="metric-pill" data-metric="room">ROOM</button>
+        <button class="metric-pill" data-metric="fb">F&B</button>
+        <button class="metric-pill" data-metric="rr">RUPA-RUPA</button>
+      </div>
+    </div>
+    <div class="chart-wrap tall"><canvas id="pdaTrend"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Komposisi Revenue</div><div class="panel-subtitle">Mix of revenue streams</div></div></div>
+    <div class="chart-wrap tall"><canvas id="pdaComp"></canvas></div>
+  </div>
+</div>
+<div class="row row-2">
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Tren Occupancy</div><div class="panel-subtitle">Daily room occupancy</div></div></div>
+    <div class="chart-wrap"><canvas id="pdaOcc"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Revenue per Occupied Room</div><div class="panel-subtitle">ARR proxy</div></div></div>
+    <div class="chart-wrap"><canvas id="pdaRate"></canvas></div>
+  </div>
+</div>
+<div class="row row-2">
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Performa per Hari Dalam Minggu</div><div class="panel-subtitle">Day-of-week analysis</div></div></div>
+    <div class="chart-wrap"><canvas id="pdaDow"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Breakdown Bulanan</div><div class="panel-subtitle">Monthly revenue</div></div></div>
+    <div class="chart-wrap"><canvas id="pdaMonthly"></canvas></div>
+  </div>
+</div>
+
+<!-- ========== SECTION 2: PENDAPATAN OVERALL ========== -->
+<div class="section-header pendapatan-section">
+  <span class="section-num">SECTION 2</span>
+  <h2 class="section-title">Pendapatan <em>· Total Semua Unit</em></h2>
+  <div class="section-subtitle">Aggregated across all units</div>
+</div>
+<div class="kpi-grid cols-4" id="pendapatanKpi"></div>
+<div class="row row-1">
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Tren Pendapatan Harian (Semua Unit)</div><div class="panel-subtitle">Total daily revenue</div></div></div>
+    <div class="chart-wrap tall"><canvas id="pendapatanTrend"></canvas></div>
+  </div>
+</div>
+<div class="row row-3-pies">
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Pendapatan per Platform</div><div class="panel-subtitle">All units</div></div></div>
+    <div class="chart-wrap"><canvas id="piePlatform"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Pendapatan per Jenis Tiket</div><div class="panel-subtitle">All units</div></div></div>
+    <div class="chart-wrap"><canvas id="pieJenis"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Pendapatan per Kelompok Jenis Tiket</div><div class="panel-subtitle">All units</div></div></div>
+    <div class="chart-wrap"><canvas id="pieKelompok"></canvas></div>
+  </div>
+</div>
+<div class="row row-1">
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Pendapatan per Unit</div><div class="panel-subtitle">Total per unit · current period</div></div></div>
+    <div class="chart-wrap"><canvas id="pendapatanByUnit"></canvas></div>
+  </div>
+</div>
+
+<!-- ========== Per-unit Pendapatan sections injected here ========== -->
+<div id="perUnitPendapatan"></div>
+
+<!-- ========== SECTION: PENGUNJUNG OVERALL ========== -->
+<div class="section-header pengunjung-section">
+  <span class="section-num">SECTION 3</span>
+  <h2 class="section-title">Pengunjung <em>· Per Unit Terpisah</em></h2>
+  <div class="section-subtitle">Visitor counts by unit (no aggregation pie)</div>
+</div>
+<div class="kpi-grid cols-4" id="pengunjungKpi"></div>
+<div class="row row-1">
+  <div class="panel">
+    <div class="panel-header"><div><div class="panel-title">Tren Pengunjung Harian (Stacked per Unit)</div><div class="panel-subtitle">Daily visitors stacked by unit</div></div></div>
+    <div class="chart-wrap tall"><canvas id="pengunjungTrend"></canvas></div>
+  </div>
+</div>
+
+<!-- ========== Per-unit Pengunjung sections injected here ========== -->
+<div id="perUnitPengunjung"></div>
+
+<div class="footer" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace;">
+  <div>ANCOL PERFORMANCE · UNIFIED DASHBOARD v5.0</div>
+  <div id="lastUpdate"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="pdf-overlay" id="pdfOverlay">
+  <div class="pdf-overlay-content">
+    <div class="spinner"></div>
+    <h3>Menyiapkan PDF...</h3>
+    <p id="pdfStatus">Rendering dashboard</p>
+  </div>
+</div>
+
+<script>
+
+// Database PDA — semua kolom (occupancy, room/F&B/rupa-rupa/general revenue per tahun) dalam 1 sheet
+const PDA_URL_DEFAULT = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQldjdxSUizd6XUyp4_mF2RhZ52xAZ4o_QHruggcnwXTfj0_wkWDffoas5XsbfojP1meTQPQ4RzV5CA/pub?gid=1342695821&single=true&output=csv";
+const PENJ_URL_DEFAULT = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRZPWYlaHsoy5hIV2H_Ss11bAIfijtrSZIDkkQfpVdvpZj8EhqyiuUz2yapvG9gg7bRxBeLkbY4f3Zb/pub?output=csv";
+const PENGUNJUNG_URL_DEFAULT = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQeMtEdSvQ3msdAgt93iqzmpoK0ijtz9dt8QTPkBtxOQL63zhKz5BKLJy-34LzBMyNb1U-4nrC_chyY/pub?output=csv";
+
+// Minimal fallback data (dashboard will load actual data from spreadsheet)
+const PDA_FALLBACK = [];
+const PENJ_FALLBACK = [];
+
+// Unit ordering — derived from "1. Ancol" prefix in data
+const UNIT_ORDER = ['1. Ancol', '2. Dufan', '3. Seaworld', '4. Samudra', '5. Atlantis', '6. Jakarta Bird Land'];
+const TIDAK_DITEMUKAN = 'Tidak ditemukan';
+
+// ============ FORMATTERS ============
+const FMT_FULL = n => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n || 0));
+const FMT_RP = n => 'Rp ' + FMT_FULL(n);
+const FMT_NUM = n => FMT_FULL(n);
+const FMT_COMPACT = n => {
+  if (n == null || isNaN(n)) return '0';
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return (n/1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+  if (abs >= 1e6) return (n/1e6).toFixed(1).replace(/\.?0+$/, '') + 'M';
+  if (abs >= 1e3) return (n/1e3).toFixed(0) + 'K';
+  return FMT_FULL(n);
+};
+const FMT_RP_COMPACT = n => 'Rp ' + FMT_COMPACT(n);
+const FMT_DATE_SHORT = s => {
+  const [y,m,d] = s.split('-');
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  return `${parseInt(d)} ${months[parseInt(m)-1]} ${y}`;
+};
+const FMT_DM = s => {
+  const [y,m,d] = s.split('-');
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  return `${parseInt(d)} ${months[parseInt(m)-1]}`;
+};
+const MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const DOW_NAMES = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+const pad = n => String(n).padStart(2,'0');
+
+Chart.defaults.color = '#71747D';
+Chart.defaults.borderColor = '#E7EBF5';
+Chart.defaults.font.family = 'Inter, sans-serif';
+Chart.defaults.font.size = 11;
+Chart.defaults.devicePixelRatio = 2;
+
+// Palette pie chart: 9 shades biru laut Ancol dari deep ke pale,
+// ditambah 2 stops netral di akhir untuk slice ekstra.
+// Urutan dari paling pekat → paling pucat memberi hierarki visual:
+// slice terbesar otomatis dapat warna paling solid.
+const PIE_COLORS = ['#004A99', '#007CFF', '#007CFF', '#5BAAFF', '#A3CFFF', '#E7F2FF', '#003366', '#005AB5', '#AEB2BE'];
+
+// ============ DATE UTILS ============
+const dateToISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const ISOToDate = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const daysBetween = (a, b) => Math.round((b-a) / 86400000);
+const startOfWeekSunday = d => { const x = new Date(d); x.setDate(x.getDate() - x.getDay()); return x; };
+
+// ============ STATE ============
+const state = {
+  pdaRaw: [],     // PDA records with year/month/day
+  penjRaw: [],    // Penjualan records {d, u, p, j, k, r, v}
+  pengunjungRaw: [], // Pengunjung records {d, u, p, j, k, q} — q = jumlah pengunjung
+  dataMin: null, dataMax: null,
+  cur: { start: null, end: null, presetKey: 'last28' },
+  cmp: { start: null, end: null, mode: 'previous_year_match_dow', enabled: true },
+  trendMetric: 'total',
+  pdaUrl: PDA_URL_DEFAULT, penjUrl: PENJ_URL_DEFAULT, pengunjungUrl: PENGUNJUNG_URL_DEFAULT,
+  pdaLastFetch: null, penjLastFetch: null, pengunjungLastFetch: null,
+  pdaStatus: 'init', penjStatus: 'init',
+};
+let charts = {}; // key -> Chart instance
+
+// ============ STORAGE ============
+const STORAGE_KEY = 'ancol_dashboard_v5';
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      pdaUrl: state.pdaUrl, penjUrl: state.penjUrl, pengunjungUrl: state.pengunjungUrl,
+      pdaCache: state.pdaRaw, penjCache: state.penjRaw, pengunjungCache: state.pengunjungRaw,
+      pdaLastFetch: state.pdaLastFetch, penjLastFetch: state.penjLastFetch,
+      pengunjungLastFetch: state.pengunjungLastFetch,
+    }));
+  } catch(e) { console.warn('localStorage save failed (probably quota):', e); }
+}
+function loadStateFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function setStatus(which, type, text) {
+  let elId = 'penjStatus';
+  if (which === 'pda') elId = 'pdaStatus';
+  else if (which === 'pengunjung') elId = 'pengunjungStatus';
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.className = 'status-pill ' + type;
+  el.querySelector('.status-dot').className = 'status-dot ' + type;
+  el.querySelector('.status-text').textContent = text;
+}
+function showToast(message, type = 'info') {
+  const t = document.getElementById('toast');
+  t.className = 'toast ' + type; t.textContent = message;
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => t.classList.remove('show'), type === 'error' ? 12000 : 4000);
+}
+
+// ============ NUMBER PARSING (smart format detection) ============
+function parseNum(v) {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number') return v;
+  let s = String(v).replace(/\s/g, '').replace(/Rp/gi, '').trim();
+  if (s === '' || s === '-' || s.toLowerCase() === 'nan') return 0;
+  let negative = false;
+  if (s.startsWith('(') && s.endsWith(')')) { negative = true; s = s.slice(1, -1); }
+  const hasComma = s.includes(','), hasDot = s.includes('.');
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+  } else if (hasDot && !hasComma) {
+    const parts = s.split('.');
+    if (parts.length > 2) s = s.replace(/\./g, '');
+    else if (parts.length === 2 && parts[1].length === 3 && /^\d+$/.test(parts[0]) && /^\d+$/.test(parts[1])) s = s.replace(/\./g, '');
+  } else if (hasComma && !hasDot) {
+    const parts = s.split(',');
+    if (parts.length > 2) s = s.replace(/,/g, '');
+    else if (parts.length === 2 && parts[1].length === 3 && /^\d+$/.test(parts[0]) && /^\d+$/.test(parts[1])) s = s.replace(/,/g, '');
+    else s = s.replace(',', '.');
+  }
+  const n = parseFloat(s);
+  if (isNaN(n)) return 0;
+  return negative ? -n : n;
+}
+
+function parseDateAny(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  let s = String(v).trim();
+
+  // Handle Indonesian month names
+  const idMonths = {
+    'januari': 'january', 'februari': 'february', 'maret': 'march', 'mei': 'may',
+    'juni': 'june', 'juli': 'july', 'agustus': 'august', 'oktober': 'october', 'desember': 'december',
+    'agu': 'aug', 'okt': 'oct', 'des': 'dec'
+  };
+  let sLower = s.toLowerCase();
+  for (const [id, en] of Object.entries(idMonths)) {
+    if (sLower.includes(id)) {
+      // replace case-insensitive
+      s = s.replace(new RegExp(id, 'i'), en);
+      break;
+    }
+  }
+
+  let d = new Date(s);
+  if (!isNaN(d)) return d;
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (m) {
+    d = new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
+    if (!isNaN(d)) return d;
+  }
+  return null;
+}
+
+// ============ PDA CSV PARSING ============
+// Sheet: LH_PDA — satu baris = satu hari (tanggal sudah mengandung tahun).
+// Kolom tidak lagi ber-suffix tahun. findCol() toleran terhadap spasi & case.
+const PDA_COLS = {
+  date:   'Tanggal',
+  occ:    'OCCUPANCY ROOM',
+  room:   'ROOM REVENUE',
+  fb:     'FOOD & BEVERAGE REVENUE',
+  rr:     'RUPA-RUPA REVENUE',
+  total:  'General Revenue',               // Total Revenue (Gross)
+  genrev: 'GENERAL REVENUE (Setelah Potong)', // Total Revenue Setelah Potongan
+};
+function findCol(headers, target) {
+  const norm = s => s.replace(/\s+/g, ' ').trim().toLowerCase();
+  const tNorm = norm(target);
+  let idx = headers.findIndex(h => norm(h) === tNorm);
+  if (idx >= 0) return idx;
+  const tLoose = tNorm.replace(/\s/g, '');
+  return headers.findIndex(h => norm(h).replace(/\s/g, '') === tLoose);
+}
+function transformPDACSV(csvText) {
+  const parsed = Papa.parse(csvText, { skipEmptyLines: true });
+  if (!parsed.data || parsed.data.length < 2) throw new Error('PDA CSV kosong/invalid');
+  const rows = parsed.data;
+  const headers = rows[0].map(h => String(h || ''));
+  const colIdx = {};
+  for (const [k, name] of Object.entries(PDA_COLS)) colIdx[k] = findCol(headers, name);
+  if (colIdx.date < 0) throw new Error('Kolom "Tanggal" tidak ditemukan di PDA sheet');
+  const records = [];
+  let rawCount = 0; // jumlah baris yang punya setidaknya satu nilai angka
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const d = parseDateAny(row[colIdx.date]);
+    if (!d) continue;
+    // Satu baris = satu hari nyata (tahun sudah ada di kolom Tanggal)
+    const dataKeys = ['occ', 'room', 'fb', 'rr', 'total', 'genrev'];
+    const hasData = dataKeys.some(k => colIdx[k] >= 0 && parseNum(row[colIdx[k]]) !== 0);
+    if (hasData) rawCount++;
+    records.push({
+      date:   dateToISO(d),
+      month:  d.getMonth() + 1,
+      day:    d.getDate(),
+      occ:    colIdx.occ    >= 0 ? parseNum(row[colIdx.occ])    : 0,
+      room:   colIdx.room   >= 0 ? parseNum(row[colIdx.room])   : 0,
+      fb:     colIdx.fb     >= 0 ? parseNum(row[colIdx.fb])     : 0,
+      rr:     colIdx.rr     >= 0 ? parseNum(row[colIdx.rr])     : 0,
+      total:  colIdx.total  >= 0 ? parseNum(row[colIdx.total])  : 0,
+      genrev: colIdx.genrev >= 0 ? parseNum(row[colIdx.genrev]) : 0,
+    });
+  }
+  if (records.length === 0) throw new Error('PDA: tidak ada baris valid');
+  records.sort((a, b) => a.date.localeCompare(b.date));
+  return { records, rawCount };
+}
+
+// ============ PENJUALAN CSV PARSING ============
+// Kolom: No. Tanggal Transaksi Jumlah Pendapatan Nama Unit Platform Jenis Tiket Kelompok Jenis Tiket
+function transformPenjualanCSV(csvText) {
+  const parsed = Papa.parse(csvText, { skipEmptyLines: true, header: true });
+  if (!parsed.data || parsed.data.length === 0) throw new Error('Penjualan CSV kosong');
+  const rawCount = parsed.data.length; // jumlah baris asli CSV sebelum agregasi
+
+  const agg = new Map();
+  const cleanCat = v => {
+    const s = String(v || '').trim();
+    return (s === '' || s.toLowerCase() === 'nan' || s.toLowerCase() === 'null' || s === '-') ? TIDAK_DITEMUKAN : s;
+  };
+
+  for (const row of parsed.data) {
+    // Kolom tanggal: "Tanggal Transaksi" format d/m/yyyy atau m/d/yyyy
+    const rawDate = row['Tanggal Transaksi'] || row['tanggal transaksi'] || '';
+    const d = parseDateAny(rawDate);
+    if (!d) continue;
+    const date = dateToISO(d);
+    const u = cleanCat(row['Nama Unit']);
+    const p = cleanCat(row['Platform']);
+    const j = cleanCat(row['Jenis Tiket']);
+    const k = cleanCat(row['Kelompok Jenis Tiket']);
+    // Kolom pendapatan: "Jumlah Pendapatan"
+    const r = parseNum(row['Jumlah Pendapatan'] || row['jumlah pendapatan'] || 0);
+    const key = `${date}|${u}|${p}|${j}|${k}`;
+    const cur = agg.get(key);
+    if (cur) { cur.r += r; cur.v += 1; }
+    else agg.set(key, { d: date, u, p, j, k, r, v: 1 });
+  }
+  const records = Array.from(agg.values());
+  if (records.length === 0) throw new Error('Penjualan: tidak ada baris valid');
+  records.sort((a,b) => a.d.localeCompare(b.d));
+  return { records, rawCount };
+}
+
+// ============ PENGUNJUNG CSV PARSING ============
+// Kolom: No. Tanggal Kunjungan Jumlah Pengunjung Nama Unit Platform Jenis Tiket Kelompok Jenis Tiket
+function transformPengunjungCSV(csvText) {
+  const parsed = Papa.parse(csvText, { skipEmptyLines: true, header: true });
+  if (!parsed.data || parsed.data.length === 0) throw new Error('Pengunjung CSV kosong');
+  const rawCount = parsed.data.length; // jumlah baris asli CSV sebelum agregasi
+
+  const agg = new Map();
+  const cleanCat = v => {
+    const s = String(v || '').trim();
+    return (s === '' || s.toLowerCase() === 'nan' || s.toLowerCase() === 'null' || s === '-') ? TIDAK_DITEMUKAN : s;
+  };
+
+  for (const row of parsed.data) {
+    const rawDate = row['Tanggal Kunjungan'] || row['tanggal kunjungan'] || '';
+    const d = parseDateAny(rawDate);
+    if (!d) continue;
+    const date = dateToISO(d);
+    const u = cleanCat(row['Nama Unit']);
+    const p = cleanCat(row['Platform']);
+    const j = cleanCat(row['Jenis Tiket']);
+    const k = cleanCat(row['Kelompok Jenis Tiket']);
+    // Kolom pengunjung: "Jumlah Pengunjung"
+    const q = parseNum(row['Jumlah Pengunjung'] || row['jumlah pengunjung'] || 0);
+    const key = `${date}|${u}|${p}|${j}|${k}`;
+    const cur = agg.get(key);
+    if (cur) { cur.q += q; }
+    else agg.set(key, { d: date, u, p, j, k, q });
+  }
+  const records = Array.from(agg.values());
+  if (records.length === 0) throw new Error('Pengunjung: tidak ada baris valid');
+  records.sort((a,b) => a.d.localeCompare(b.d));
+  return { records, rawCount };
+}
+
+// ============ FETCHING ============
+function validateSheetUrl(url) {
+  if (!url) return 'URL kosong';
+  if (!/^https?:\/\//.test(url)) return 'URL harus diawali https://';
+  if (!url.includes('docs.google.com/spreadsheets')) return 'Bukan URL Google Sheets';
+  if (url.includes('/edit') || url.includes('#gid=')) return 'URL Edit/Share, bukan Publish to web';
+  return null;
+}
+function normalizeUrl(url) {
+  url = url.trim();
+  if (url.includes('output=csv')) return url;
+  if (url.includes('/pub?')) return url + (url.endsWith('?') || url.endsWith('&') ? '' : '&') + 'output=csv';
+  if (url.includes('/pub')) return url + '?output=csv';
+  return url;
+}
+
+async function fetchCSV(url) {
+  const ve = validateSheetUrl(url);
+  if (ve) throw new Error(ve);
+  url = normalizeUrl(url);
+  const res = await fetch(url, { cache: 'no-store', redirect: 'follow' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  if (text.startsWith('<') || text.includes('<!DOCTYPE')) throw new Error('Server kembalikan HTML, bukan CSV');
+  return text;
+}
+
+async function loadPDA(silent = false) {
+  setStatus('pda', 'loading', 'PDA · FETCHING');
+  try {
+    const text = await fetchCSV(state.pdaUrl);
+    const { records, rawCount } = transformPDACSV(text);
+    state.pdaRaw = records;
+    state.pdaLastFetch = new Date().toISOString();
+    saveState();
+    // Tampilkan jumlah baris spreadsheet yang memiliki nilai angka (sesuai spreadsheet asli)
+    const label = rawCount >= 1000 ? FMT_NUM(rawCount) : rawCount;
+    setStatus('pda', 'live', `PDA · LIVE · ${label} BARIS`);
+    if (!silent) showToast(`✓ PDA: ${label} baris`, 'success');
+    return true;
+  } catch (e) {
+    console.error('PDA fetch failed:', e);
+    setStatus('pda', state.pdaRaw.length > 0 ? 'cached' : 'error', state.pdaRaw.length > 0 ? 'PDA · CACHED' : 'PDA · ERROR');
+    if (!silent) showToast('✗ PDA: ' + e.message, 'error');
+    return false;
+  }
+}
+async function loadPenjualan(silent = false) {
+  setStatus('penj', 'loading', 'PENJUALAN · FETCHING');
+  try {
+    const text = await fetchCSV(state.penjUrl);
+    const { records, rawCount } = transformPenjualanCSV(text);
+    state.penjRaw = records;
+    state.penjLastFetch = new Date().toISOString();
+    saveState();
+    const label = rawCount >= 1000 ? FMT_NUM(rawCount) : rawCount;
+    setStatus('penj', 'live', `PENJUALAN · LIVE · ${label} BARIS`);
+    if (!silent) showToast(`✓ Penjualan: ${label} baris`, 'success');
+    return true;
+  } catch (e) {
+    console.error('Penjualan fetch failed:', e);
+    setStatus('penj', state.penjRaw.length > 0 ? 'cached' : 'error', state.penjRaw.length > 0 ? 'PENJUALAN · CACHED' : 'PENJUALAN · ERROR');
+    if (!silent) showToast('✗ Penjualan: ' + e.message, 'error');
+    return false;
+  }
+}
+async function loadPengunjung(silent = false) {
+  setStatus('pengunjung', 'loading', 'PENGUNJUNG · FETCHING');
+  try {
+    const text = await fetchCSV(state.pengunjungUrl);
+    const { records, rawCount } = transformPengunjungCSV(text);
+    state.pengunjungRaw = records;
+    state.pengunjungLastFetch = new Date().toISOString();
+    saveState();
+    const label = rawCount >= 1000 ? FMT_NUM(rawCount) : rawCount;
+    setStatus('pengunjung', 'live', `PENGUNJUNG · LIVE · ${label} BARIS`);
+    if (!silent) showToast(`✓ Pengunjung: ${label} baris`, 'success');
+    return true;
+  } catch (e) {
+    console.error('Pengunjung fetch failed:', e);
+    setStatus('pengunjung', state.pengunjungRaw.length > 0 ? 'cached' : 'error', state.pengunjungRaw.length > 0 ? 'PENGUNJUNG · CACHED' : 'PENGUNJUNG · ERROR');
+    if (!silent) showToast('✗ Pengunjung: ' + e.message, 'error');
+    return false;
+  }
+}
+
+// ============ DATE / FILTER ============
+function recomputeDataRange() {
+  const dates = [];
+  state.pdaRaw.forEach(r => dates.push(r.date));
+  state.penjRaw.forEach(r => dates.push(r.d));
+  state.pengunjungRaw.forEach(r => dates.push(r.d));
+  dates.sort();
+  state.dataMin = dates[0] || null;
+  state.dataMax = dates[dates.length-1] || null;
+}
+function dataAnchor() {
+  // Use latest available date as "today" anchor (so presets like Last 28 days work even without real today)
+  return state.dataMax ? ISOToDate(state.dataMax) : new Date();
+}
+function applyPreset(key) {
+  const anchor = dataAnchor();
+  let start, end;
+  switch(key) {
+    case 'today': start = end = anchor; break;
+    case 'yesterday': start = end = addDays(anchor, -1); break;
+    case 'this_week_sun': start = startOfWeekSunday(anchor); end = anchor; break;
+    case 'last7': end = anchor; start = addDays(anchor, -6); break;
+    case 'last_week_sun_sat': { const sow = startOfWeekSunday(anchor); end = addDays(sow, -1); start = addDays(end, -6); break; }
+    case 'last28': end = anchor; start = addDays(anchor, -27); break;
+    case 'last30': end = anchor; start = addDays(anchor, -29); break;
+    case 'this_month': start = new Date(anchor.getFullYear(), anchor.getMonth(), 1); end = anchor; break;
+    case 'last_month': start = new Date(anchor.getFullYear(), anchor.getMonth()-1, 1); end = new Date(anchor.getFullYear(), anchor.getMonth(), 0); break;
+    case 'ytd': start = new Date(anchor.getFullYear(), 0, 1); end = anchor; break;
+    case 'all_time': start = state.dataMin ? ISOToDate(state.dataMin) : anchor; end = state.dataMax ? ISOToDate(state.dataMax) : anchor; break;
+    default: end = anchor; start = addDays(anchor, -27); key = 'last28';
+  }
+  state.cur.start = dateToISO(start);
+  state.cur.end = dateToISO(end);
+  state.cur.presetKey = key;
+  recomputeCompare();
+}
+function recomputeCompare() {
+  if (!state.cur.start || !state.cur.end) return;
+  const cs = ISOToDate(state.cur.start), ce = ISOToDate(state.cur.end);
+  const len = daysBetween(cs, ce);
+  if (state.cmp.mode === 'previous_period') {
+    const newEnd = addDays(cs, -1); const newStart = addDays(newEnd, -len);
+    state.cmp.start = dateToISO(newStart); state.cmp.end = dateToISO(newEnd);
+  } else if (state.cmp.mode === 'previous_year') {
+    const ns = new Date(cs); ns.setFullYear(ns.getFullYear()-1);
+    const ne = new Date(ce); ne.setFullYear(ne.getFullYear()-1);
+    state.cmp.start = dateToISO(ns); state.cmp.end = dateToISO(ne);
+  } else if (state.cmp.mode === 'previous_year_match_dow') {
+    state.cmp.start = dateToISO(addDays(cs, -364));
+    state.cmp.end = dateToISO(addDays(ce, -364));
+  }
+}
+
+// ============ FILTERING ============
+function filterPDA(start, end) {
+  if (!start || !end) return [];
+  return state.pdaRaw.filter(r => r.date >= start && r.date <= end);
+}
+function filterPenj(start, end) {
+  if (!start || !end) return [];
+  return state.penjRaw.filter(r => r.d >= start && r.d <= end);
+}
+function filterPengunjung(start, end) {
+  if (!start || !end) return [];
+  return state.pengunjungRaw.filter(r => r.d >= start && r.d <= end);
+}
+function pct(curr, prev) {
+  if (!prev || prev === 0) return null;
+  return ((curr - prev) / prev) * 100;
+}
+function deltaHTML(p) {
+  if (p === null || isNaN(p)) return '<span class="kpi-delta">—</span>';
+  const cls = p >= 0 ? 'up' : 'down';
+  const arrow = p >= 0 ? '▲' : '▼';
+  return `<span class="kpi-delta ${cls}">${arrow} ${Math.abs(p).toFixed(1)}%</span>`;
+}
+
+
+// ============ VALUE LABELS PLUGIN ============
+const valueLabelsPlugin = {
+  id: 'valueLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    chart.data.datasets.forEach((ds, dsIdx) => {
+      const meta = chart.getDatasetMeta(dsIdx);
+      if (meta.hidden || ds.type === 'line') return;
+      if (ds.skipValueLabels) return;
+      meta.data.forEach((bar, idx) => {
+        const value = ds.data[idx];
+        if (value == null || value === 0) return;
+        ctx.save();
+        ctx.fillStyle = ds.valueLabelColor || '#71747D';
+        ctx.font = '600 10px JetBrains Mono';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const formatted = ds.valueLabelFormatter ? ds.valueLabelFormatter(value) : FMT_COMPACT(value);
+        ctx.fillText(formatted, bar.x, bar.y - 4);
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// Helper: destroy and recreate chart
+function makeChart(canvasId, config) {
+  if (charts[canvasId]) { charts[canvasId].destroy(); }
+  const el = document.getElementById(canvasId);
+  if (!el) return null;
+  charts[canvasId] = new Chart(el, config);
+  return charts[canvasId];
+}
+
+// ============ HEADER + COMPARE SUMMARY ============
+const PRESET_LABELS = {
+  today: 'Today', yesterday: 'Yesterday', this_week_sun: 'This week (Sun - Today)',
+  last7: 'Last 7 days', last_week_sun_sat: 'Last week (Sun - Sat)',
+  last28: 'Last 28 days', last30: 'Last 30 days', this_month: 'This month',
+  last_month: 'Last month', ytd: 'Year to date', all_time: 'All time', custom: 'Custom'
+};
+function updateDateTrigger() {
+  if (!state.cur.start) return;
+  const presetTag = PRESET_LABELS[state.cur.presetKey] || 'Custom';
+  const rangeText = `${FMT_DATE_SHORT(state.cur.start)} – ${FMT_DATE_SHORT(state.cur.end)}`;
+  document.getElementById('dateTriggerInner').innerHTML = `
+    <span class="preset-tag">${presetTag}</span>
+    <span class="range-text">${rangeText}</span>
+    <span class="arrow">▼</span>
+  `;
+}
+
+function updateGlobalHeader() {
+  if (!state.cur.start) return;
+  const pdaCur = filterPDA(state.cur.start, state.cur.end);
+  document.getElementById('dateRangeText').textContent = `${FMT_DATE_SHORT(state.cur.start)} — ${FMT_DATE_SHORT(state.cur.end)}`;
+  const days = daysBetween(ISOToDate(state.cur.start), ISOToDate(state.cur.end)) + 1;
+  document.getElementById('daysCountText').textContent = `${days} hari${state.cmp.enabled ? ' · vs pembanding' : ''}`;
+  
+  const sumEl = document.getElementById('compareSummary');
+  if (state.cmp.enabled) {
+    const cmpDays = daysBetween(ISOToDate(state.cmp.start), ISOToDate(state.cmp.end)) + 1;
+    sumEl.innerHTML = `<span><strong>${FMT_DATE_SHORT(state.cur.start)} — ${FMT_DATE_SHORT(state.cur.end)}</strong> (${days} hari)</span>` +
+      `<span class="vs">VS</span><span><strong>${FMT_DATE_SHORT(state.cmp.start)} — ${FMT_DATE_SHORT(state.cmp.end)}</strong> (${cmpDays} hari)</span>`;
+  } else {
+    sumEl.innerHTML = `<span><strong>${FMT_DATE_SHORT(state.cur.start)} — ${FMT_DATE_SHORT(state.cur.end)}</strong> (${days} hari) · Tidak membandingkan</span>`;
+  }
+  updateDateTrigger();
+}
+
+// ============ PDA SECTION ============
+function pdaTotals(rows) {
+  const sum = k => rows.reduce((a, r) => a + (r[k] || 0), 0);
+  // 'total' = General Revenue (kolom langsung dari sheet, bukan kalkulasi room+fb+rr)
+  return {
+    occ:    sum('occ'),
+    room:   sum('room'),
+    fb:     sum('fb'),
+    rr:     sum('rr'),
+    total:  sum('total'),   // General Revenue (gross)
+    genrev: sum('genrev'),  // GENERAL REVENUE (Setelah Potong)
+  };
+}
+function renderPDAKPI() {
+  const cur = pdaTotals(filterPDA(state.cur.start, state.cur.end));
+  const cmp = state.cmp.enabled ? pdaTotals(filterPDA(state.cmp.start, state.cmp.end)) : null;
+  const cards = [
+    { cls: '', label: 'TOTAL REVENUE', curr: cur.total, prev: cmp?.total, isCurrency: true },
+    { cls: 'teal', label: 'TOTAL REVENUE (Setelah Potongan)', curr: cur.genrev, prev: cmp?.genrev, isCurrency: true },
+    { cls: 'amber', label: 'ROOM REVENUE', curr: cur.room, prev: cmp?.room, isCurrency: true },
+    { cls: 'green', label: 'F&B REVENUE', curr: cur.fb, prev: cmp?.fb, isCurrency: true },
+    { cls: 'purple', label: 'RUPA-RUPA REVENUE', curr: cur.rr, prev: cmp?.rr, isCurrency: true },
+    { cls: 'blue', label: 'TOTAL OCCUPANCY', curr: cur.occ, prev: cmp?.occ, isCurrency: false, unit: 'rooms' },
+  ];
+  document.getElementById('pdaKpi').innerHTML = cards.map(c => renderKPICard(c)).join('');
+}
+function renderKPICard(c) {
+  const formatted = c.isCurrency
+    ? `<span class="kpi-currency">Rp</span>${FMT_FULL(c.curr)}`
+    : `${FMT_FULL(c.curr)} <span class="kpi-unit">${c.unit||''}</span>`;
+  const prevFormatted = c.isCurrency ? `Rp ${FMT_FULL(c.prev||0)}` : `${FMT_FULL(c.prev||0)} ${c.unit||''}`;
+  const showCompare = state.cmp.enabled && c.prev !== undefined && c.prev !== null;
+  return `
+    <div class="kpi-card ${c.cls}">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-value">${formatted}</div>
+      ${showCompare ? `<div class="kpi-prev">Pembanding: ${prevFormatted}</div>` : ''}
+      ${showCompare ? `<div class="kpi-compare">${deltaHTML(pct(c.curr, c.prev))}<span class="kpi-vs">vs pembanding</span></div>` : ''}
+    </div>
+  `;
+}
+
+function renderPDATrend() {
+  const curRows = filterPDA(state.cur.start, state.cur.end);
+  const cmpRows = state.cmp.enabled ? filterPDA(state.cmp.start, state.cmp.end) : [];
+  const m = state.trendMetric;
+  // 'total' sekarang langsung pakai field r.total (General Revenue dari sheet)
+  const getVal = r => r[m] || 0;
+  const useRows = curRows.length >= cmpRows.length ? curRows : cmpRows;
+  const labels = useRows.map(r => FMT_DATE_SHORT(r.date));
+  const datasets = [{
+    label: 'Periode Analisis', data: curRows.map(getVal),
+    borderColor: '#007CFF',
+    backgroundColor: ctx => { const g = ctx.chart.ctx.createLinearGradient(0,0,0,300); g.addColorStop(0, 'rgba(0,124,255,0.35)'); g.addColorStop(1, 'rgba(0,124,255,0)'); return g; },
+    borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5,
+  }];
+  if (state.cmp.enabled && cmpRows.length > 0) {
+    datasets.push({ label: 'Pembanding', data: cmpRows.map(getVal), borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
+  }
+  makeChart('pdaTrend', {
+    type: 'line', data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', align: 'end', labels: { boxWidth: 10, padding: 14 } },
+        tooltip: { backgroundColor: '#303135', titleColor: '#FFFFFF', bodyColor: '#F4F7FE', borderColor: '#4D4F56', borderWidth: 1, padding: 12,
+          callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_RP(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 12, font: { size: 10 } } },
+        y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => 'Rp ' + FMT_COMPACT(v), font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function renderPDAComp() {
+  const t = pdaTotals(filterPDA(state.cur.start, state.cur.end));
+  const data = [t.room, t.fb, t.rr];
+  const total = data.reduce((a,b)=>a+b,0);
+  const rowsCount = filterPDA(state.cur.start, state.cur.end).length;
+  makeChart('pdaComp', {
+    type: 'doughnut',
+    data: { labels: ['Room', 'Food & Beverage', 'Rupa-Rupa'], datasets: [{ data, backgroundColor: ['#007CFF', '#5BAAFF', '#A3CFFF'], borderColor: '#FFFFFF', borderWidth: 3, hoverOffset: 8 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12 } },
+        tooltip: { backgroundColor: '#303135', titleColor: '#FFFFFF', bodyColor: '#F4F7FE', borderColor: '#4D4F56', borderWidth: 1, padding: 12,
+          callbacks: { label: ctx => `${ctx.label}: ${FMT_RP(ctx.parsed)} (${total>0 ? (ctx.parsed/total*100).toFixed(1) : 0}%)` } }
+      }
+    },
+    plugins: [{
+      id: 'centerText',
+      beforeDraw(chart) {
+        const { ctx, chartArea: { width, height, top } } = chart;
+        ctx.save();
+        ctx.fillStyle = '#71747D'; ctx.font = '500 10px JetBrains Mono'; ctx.textAlign = 'center';
+        ctx.fillText('TOTAL REVENUE', width/2, top + height/2 - 22);
+        ctx.fillStyle = '#303135'; ctx.font = '500 16px Fraunces';
+        ctx.fillText(FMT_RP_COMPACT(total), width/2, top + height/2 + 4);
+        ctx.fillStyle = '#AEB2BE'; ctx.font = '400 11px Inter';
+        ctx.fillText(rowsCount + ' hari', width/2, top + height/2 + 26);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+function renderPDAOcc() {
+  const curRows = filterPDA(state.cur.start, state.cur.end);
+  const cmpRows = state.cmp.enabled ? filterPDA(state.cmp.start, state.cmp.end) : [];
+  const useRows = curRows.length >= cmpRows.length ? curRows : cmpRows;
+  const labels = useRows.map(r => FMT_DATE_SHORT(r.date));
+  const datasets = [{ label: 'Periode Analisis', data: curRows.map(r=>r.occ), borderColor: '#007CFF', backgroundColor: 'rgba(0,124,255,0.1)', borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0 }];
+  if (state.cmp.enabled && cmpRows.length > 0) datasets.push({ label: 'Pembanding', data: cmpRows.map(r=>r.occ), borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
+  makeChart('pdaOcc', {
+    type: 'line', data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_NUM(ctx.parsed.y)} kamar` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { grid: { color: '#E7EBF5' } } }
+    }
+  });
+}
+
+function renderPDARate() {
+  const curRows = filterPDA(state.cur.start, state.cur.end);
+  const cmpRows = state.cmp.enabled ? filterPDA(state.cmp.start, state.cmp.end) : [];
+  const safe = (a,b) => b > 0 ? a/b : 0;
+  const useRows = curRows.length >= cmpRows.length ? curRows : cmpRows;
+  const labels = useRows.map(r => FMT_DATE_SHORT(r.date));
+  const datasets = [{ label: 'Periode Analisis', data: curRows.map(r => safe(r.room, r.occ)), borderColor: '#007CFF', backgroundColor: 'rgba(0,124,255,0.15)', borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0 }];
+  if (state.cmp.enabled && cmpRows.length > 0) datasets.push({ label: 'Pembanding', data: cmpRows.map(r => safe(r.room, r.occ)), borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
+  makeChart('pdaRate', {
+    type: 'line', data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_RP(ctx.parsed.y)}/kamar` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => 'Rp ' + FMT_COMPACT(v) } } }
+    }
+  });
+}
+
+function renderPDADow() {
+  const rows = filterPDA(state.cur.start, state.cur.end);
+  const agg = {}; for (let i = 0; i < 7; i++) agg[i] = { rev: 0, occ: 0, count: 0 };
+  // Pakai r.total (General Revenue) sebagai basis revenue per hari dalam minggu
+  rows.forEach(r => { const dt = ISOToDate(r.date); const dow = (dt.getDay()+6)%7; agg[dow].rev += r.total || 0; agg[dow].occ += r.occ; agg[dow].count++; });
+  const avgRev = [], avgOcc = [];
+  for (let i = 0; i < 7; i++) { avgRev.push(agg[i].count ? agg[i].rev/agg[i].count : 0); avgOcc.push(agg[i].count ? agg[i].occ/agg[i].count : 0); }
+  makeChart('pdaDow', {
+    type: 'bar',
+    data: { labels: DOW_NAMES, datasets: [
+      { label: 'Avg Revenue', data: avgRev, backgroundColor: '#007CFF', borderRadius: 4, yAxisID: 'y', valueLabelFormatter: v => FMT_RP_COMPACT(v), order: 2 },
+      { label: 'Avg Occupancy', data: avgOcc, type: 'line', borderColor: '#5BAAFF', backgroundColor: '#5BAAFF', borderWidth: 3, tension: 0.3, pointRadius: 5, pointBorderColor: '#FFFFFF', pointBorderWidth: 2, yAxisID: 'y1', skipValueLabels: true, order: 1 }
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, layout: { padding: { top: 24 } },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => ctx.datasetIndex === 0 ? `Avg Rev: ${FMT_RP(ctx.parsed.y)}` : `Avg Occ: ${ctx.parsed.y.toFixed(0)} kamar` } } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => 'Rp ' + FMT_COMPACT(v) }, position: 'left' },
+        y1: { grid: { display: false }, ticks: { callback: v => v.toFixed(0) }, position: 'right' }
+      }
+    },
+    plugins: [valueLabelsPlugin]
+  });
+}
+
+function renderPDAMonthly() {
+  const curRows = filterPDA(state.cur.start, state.cur.end);
+  const cmpRows = state.cmp.enabled ? filterPDA(state.cmp.start, state.cmp.end) : [];
+  const allMonths = [...new Set([...curRows, ...cmpRows].map(r => r.month))].sort((a,b)=>a-b);
+  // Pakai r.total (General Revenue) untuk breakdown bulanan
+  const sumByMonth = rows => { const o = {}; rows.forEach(r => { o[r.month] = (o[r.month]||0) + (r.total || 0); }); return o; };
+  const cM = sumByMonth(curRows), pM = sumByMonth(cmpRows);
+  const labels = allMonths.map(m => MONTH_NAMES[m-1]);
+  const datasets = [{ label: 'Periode Analisis', data: allMonths.map(m => cM[m]||0), backgroundColor: '#007CFF', borderRadius: 4, valueLabelFormatter: v => FMT_RP_COMPACT(v) }];
+  if (state.cmp.enabled && cmpRows.length > 0) datasets.push({ label: 'Pembanding', data: allMonths.map(m => pM[m]||0), backgroundColor: '#71747D', borderRadius: 4, valueLabelFormatter: v => FMT_RP_COMPACT(v) });
+  makeChart('pdaMonthly', {
+    type: 'bar', data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, layout: { padding: { top: 24 } },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_RP(ctx.parsed.y)}` } } },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => 'Rp ' + FMT_COMPACT(v) } } }
+    },
+    plugins: [valueLabelsPlugin]
+  });
+}
+
+function renderPDAInsights() {
+  const curRows = filterPDA(state.cur.start, state.cur.end);
+  if (curRows.length === 0) {
+    document.getElementById('pdaInsights').innerHTML = '<div class="insight-item warning"><div class="insight-icon">!</div><div class="insight-content"><h4>Tidak ada data PDA di periode ini</h4><p>Coba ubah rentang tanggal.</p></div></div>';
+    return;
+  }
+  const c = pdaTotals(curRows);
+  const cmpRows = state.cmp.enabled ? filterPDA(state.cmp.start, state.cmp.end) : [];
+  const p = pdaTotals(cmpRows);
+  const cmpEnabled = state.cmp.enabled && cmpRows.length > 0;
+  const totalGrowth = cmpEnabled ? pct(c.total, p.total) : null;
+  const occGrowth = cmpEnabled ? pct(c.occ, p.occ) : null;
+  const arrCur = c.occ ? c.room/c.occ : 0;
+  const arrCmp = p.occ ? p.room/p.occ : 0;
+  const arrGrowth = (cmpEnabled && arrCmp) ? pct(arrCur, arrCmp) : null;
+  let bestDay = null;
+  curRows.forEach(r => { const tot = r.room+r.fb+r.rr; if (!bestDay || tot > bestDay.total) bestDay = { date: r.date, total: tot }; });
+  const insights = [];
+  if (totalGrowth !== null) {
+    const positive = totalGrowth >= 0;
+    insights.push({ type: positive ? 'positive' : 'negative', icon: positive ? '↗' : '↘',
+      title: `Total Revenue ${positive ? 'Tumbuh' : 'Turun'} ${Math.abs(totalGrowth).toFixed(1)}%`,
+      body: `Periode current <strong>${FMT_RP(c.total)}</strong> vs pembanding <strong>${FMT_RP(p.total)}</strong>.` });
+  }
+  if (arrGrowth !== null && occGrowth !== null) {
+    if (arrGrowth > 0 && occGrowth < 0) insights.push({ type: 'warning', icon: '◆', title: 'Pricing Power Naik, Volume Turun', body: `Rate naik <strong>${arrGrowth.toFixed(1)}%</strong> tapi occupancy turun <strong>${Math.abs(occGrowth).toFixed(1)}%</strong>.` });
+    else if (arrGrowth > 0 && occGrowth > 0) insights.push({ type: 'positive', icon: '★', title: 'Dual Growth: Rate & Volume', body: `Rate naik <strong>${arrGrowth.toFixed(1)}%</strong> dan occupancy naik <strong>${occGrowth.toFixed(1)}%</strong>.` });
+  }
+  if (bestDay) insights.push({ type: 'positive', icon: '✦', title: `Hari Terbaik: ${FMT_DATE_SHORT(bestDay.date)}`, body: `Total revenue <strong>${FMT_RP(bestDay.total)}</strong>.` });
+  document.getElementById('pdaInsights').innerHTML = insights.map(i => `
+    <div class="insight-item ${i.type}"><div class="insight-icon">${i.icon}</div><div class="insight-content"><h4>${i.title}</h4><p>${i.body}</p></div></div>
+  `).join('');
+}
+
+function renderPDA() {
+  if (state.pdaRaw.length === 0) return;
+  renderPDAKPI();
+  renderPDAInsights();
+  renderPDATrend();
+  renderPDAComp();
+  renderPDAOcc();
+  renderPDARate();
+  renderPDADow();
+  renderPDAMonthly();
+}
+
+// ============ PENJUALAN HELPERS ============
+// Get list of "real" units (sorted, excluding Tidak ditemukan) from the dataset
+function getRealUnits() {
+  const all = new Set();
+  state.penjRaw.forEach(r => { if (r.u !== TIDAK_DITEMUKAN) all.add(r.u); });
+  // Sort by predefined order, then alphabetic for any new ones
+  return [...all].sort((a, b) => {
+    const ai = UNIT_ORDER.indexOf(a), bi = UNIT_ORDER.indexOf(b);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1;
+    if (bi >= 0) return 1;
+    return a.localeCompare(b);
+  });
+}
+function unitDisplayName(u) {
+  // "1. Ancol" → "Ancol"
+  return u.replace(/^\d+\.\s*/, '');
+}
+
+function aggregatePenjualan(rows) {
+  const result = { revenue: 0, visitors: 0, byUnit: new Map(), byPlatform: new Map(), byJenis: new Map(), byKelompok: new Map() };
+  for (const r of rows) {
+    result.revenue += r.r;
+    result.visitors += r.v;
+    const updMap = (m, k) => { const cur = m.get(k) || { revenue: 0, visitors: 0 }; cur.revenue += r.r; cur.visitors += r.v; m.set(k, cur); };
+    updMap(result.byUnit, r.u);
+    updMap(result.byPlatform, r.p);
+    updMap(result.byJenis, r.j);
+    updMap(result.byKelompok, r.k);
+  }
+  return result;
+}
+
+// Aggregasi khusus untuk data Pengunjung (kolom q = Jumlah Pengunjung)
+function aggregatePengunjung(rows) {
+  const result = { total: 0, byUnit: new Map(), byPlatform: new Map(), byJenis: new Map(), byKelompok: new Map() };
+  for (const r of rows) {
+    result.total += r.q;
+    const updMap = (m, k) => { m.set(k, (m.get(k) || 0) + r.q); };
+    updMap(result.byUnit, r.u);
+    updMap(result.byPlatform, r.p);
+    updMap(result.byJenis, r.j);
+    updMap(result.byKelompok, r.k);
+  }
+  return result;
+}
+// Daily series untuk pengunjung (key q)
+function dailySeriesInRangePengunjung(rows, startISO, endISO) {
+  const m = new Map();
+  rows.forEach(r => { m.set(r.d, (m.get(r.d) || 0) + r.q); });
+  const dates = [];
+  let cur = ISOToDate(startISO), endD = ISOToDate(endISO);
+  while (cur <= endD) { dates.push(dateToISO(cur)); cur = addDays(cur, 1); }
+  return { labels: dates, values: dates.map(d => m.get(d) || 0) };
+}
+// Daftar unit dari data pengunjung
+function getRealUnitsFromPengunjung() {
+  const all = new Set();
+  state.pengunjungRaw.forEach(r => { if (r.u !== TIDAK_DITEMUKAN) all.add(r.u); });
+  return [...all].sort((a, b) => {
+    const ai = UNIT_ORDER.indexOf(a), bi = UNIT_ORDER.indexOf(b);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1;
+    if (bi >= 0) return 1;
+    return a.localeCompare(b);
+  });
+}
+// Daily series without explicit date range (just aggregates available dates)
+function dailySeriesFiltered(rows, valueKey = 'r') {
+  const m = new Map();
+  rows.forEach(r => { m.set(r.d, (m.get(r.d) || 0) + r[valueKey]); });
+  // Fill in missing dates with 0 between min and max
+  if (m.size === 0) return { labels: [], values: [] };
+  const dates = [...m.keys()].sort();
+  return { labels: dates, values: dates.map(d => m.get(d)) };
+}
+// Daily series with explicit date range so we have complete continuous series
+function dailySeriesInRange(rows, startISO, endISO, valueKey = 'r') {
+  const m = new Map();
+  rows.forEach(r => { m.set(r.d, (m.get(r.d) || 0) + r[valueKey]); });
+  const dates = [];
+  let cur = ISOToDate(startISO), endD = ISOToDate(endISO);
+  while (cur <= endD) {
+    dates.push(dateToISO(cur));
+    cur = addDays(cur, 1);
+  }
+  return { labels: dates, values: dates.map(d => m.get(d) || 0) };
+}
+
+// ============ PENDAPATAN OVERALL SECTION ============
+function renderPendapatanOverall() {
+  const curRows = filterPenj(state.cur.start, state.cur.end);
+  const cmpRows = state.cmp.enabled ? filterPenj(state.cmp.start, state.cmp.end) : [];
+  const cur = aggregatePenjualan(curRows);
+  const cmp = aggregatePenjualan(cmpRows);
+  
+  // KPI cards
+  const cards = [
+    { cls: '', label: 'TOTAL PENDAPATAN', curr: cur.revenue, prev: cmp.revenue, isCurrency: true },
+    { cls: 'green', label: 'TOTAL TRANSAKSI', curr: cur.visitors, prev: cmp.visitors, isCurrency: false, unit: 'transaksi' },
+    { cls: 'blue', label: 'AVG PER TRANSAKSI', curr: cur.visitors > 0 ? cur.revenue/cur.visitors : 0, prev: cmp.visitors > 0 ? cmp.revenue/cmp.visitors : 0, isCurrency: true },
+    { cls: 'amber', label: 'JUMLAH UNIT AKTIF', curr: cur.byUnit.size, prev: cmp.byUnit.size, isCurrency: false, unit: 'unit' },
+  ];
+  document.getElementById('pendapatanKpi').innerHTML = cards.map(c => renderKPICard(c)).join('');
+
+  // Trend chart (daily revenue)
+  const cs = dailySeriesInRange(curRows, state.cur.start, state.cur.end, 'r');
+  const datasets = [{ label: 'Periode Analisis', data: cs.values, borderColor: '#007CFF',
+    backgroundColor: ctx => { const g = ctx.chart.ctx.createLinearGradient(0,0,0,300); g.addColorStop(0, 'rgba(0,124,255,0.35)'); g.addColorStop(1, 'rgba(0,124,255,0)'); return g; },
+    borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0 }];
+  if (state.cmp.enabled && cmpRows.length > 0) {
+    const ps = dailySeriesInRange(cmpRows, state.cmp.start, state.cmp.end, 'r');
+    datasets.push({ label: 'Pembanding', data: ps.values, borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
+  }
+  makeChart('pendapatanTrend', {
+    type: 'line', data: { labels: cs.labels.map(FMT_DATE_SHORT), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_RP(ctx.parsed.y)}` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } }, y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => 'Rp ' + FMT_COMPACT(v) } } }
+    }
+  });
+
+  // Three pie charts: Platform, Jenis Tiket, Kelompok Jenis Tiket
+  renderPie('piePlatform', cur.byPlatform, 'Platform');
+  renderPie('pieJenis', cur.byJenis, 'Jenis Tiket');
+  renderPie('pieKelompok', cur.byKelompok, 'Kelompok');
+
+  // Per-unit revenue bar
+  const realUnits = getRealUnits();
+  const tidakDitemukanRev = cur.byUnit.get(TIDAK_DITEMUKAN)?.revenue || 0;
+  const labels = realUnits.map(u => unitDisplayName(u));
+  const data = realUnits.map(u => cur.byUnit.get(u)?.revenue || 0);
+  if (tidakDitemukanRev > 0) { labels.push('Others'); data.push(tidakDitemukanRev); }
+  makeChart('pendapatanByUnit', {
+    type: 'bar', data: { labels, datasets: [{ label: 'Pendapatan', data, backgroundColor: '#007CFF', borderRadius: 4, valueLabelFormatter: v => FMT_RP_COMPACT(v) }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, layout: { padding: { top: 24 } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => FMT_RP(ctx.parsed.y) } } },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => 'Rp ' + FMT_COMPACT(v) } } }
+    },
+    plugins: [valueLabelsPlugin]
+  });
+}
+
+function renderPie(canvasId, mapData, _label) {
+  // Sort entries by value desc, take top 8 + "Lainnya"
+  const entries = [...mapData.entries()].map(([k, v]) => ({ key: k, value: v.revenue }));
+  entries.sort((a,b) => b.value - a.value);
+  const top = entries.slice(0, 8);
+  const rest = entries.slice(8).reduce((a, e) => a + e.value, 0);
+  const labels = top.map(e => e.key);
+  const data = top.map(e => e.value);
+  if (rest > 0) { labels.push('Lainnya'); data.push(rest); }
+  const total = data.reduce((a,b) => a+b, 0);
+  makeChart(canvasId, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: PIE_COLORS, borderColor: '#FFFFFF', borderWidth: 2, hoverOffset: 8 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '55%',
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, padding: 8, font: { size: 10 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${FMT_RP(ctx.parsed)} (${total>0 ? (ctx.parsed/total*100).toFixed(1) : 0}%)` } }
+      }
+    }
+  });
+}
+
+// ============ PER-UNIT PENDAPATAN SECTION ============
+function renderUnitPendapatan(unit, idx) {
+  const slug = `unit_${idx}`;
+  const curUnit = filterPenj(state.cur.start, state.cur.end).filter(r => r.u === unit);
+  const cmpUnit = state.cmp.enabled ? filterPenj(state.cmp.start, state.cmp.end).filter(r => r.u === unit) : [];
+  const cur = aggregatePenjualan(curUnit);
+  const cmp = aggregatePenjualan(cmpUnit);
+  
+  // KPI
+  const cards = [
+    { cls: '', label: 'PENDAPATAN', curr: cur.revenue, prev: cmp.revenue, isCurrency: true },
+    { cls: 'green', label: 'TRANSAKSI', curr: cur.visitors, prev: cmp.visitors, isCurrency: false, unit: 'transaksi' },
+    { cls: 'blue', label: 'AVG PER TRANSAKSI', curr: cur.visitors > 0 ? cur.revenue/cur.visitors : 0, prev: cmp.visitors > 0 ? cmp.revenue/cmp.visitors : 0, isCurrency: true },
+  ];
+  const kpiEl = document.getElementById(`${slug}_kpi`);
+  if (kpiEl) kpiEl.innerHTML = cards.map(c => renderKPICard(c)).join('');
+
+  // Trend
+  const cs = dailySeriesInRange(curUnit, state.cur.start, state.cur.end, 'r');
+  const datasets = [{ label: 'Periode Analisis', data: cs.values, borderColor: '#007CFF',
+    backgroundColor: ctx => { const g = ctx.chart.ctx.createLinearGradient(0,0,0,300); g.addColorStop(0, 'rgba(0,124,255,0.3)'); g.addColorStop(1, 'rgba(0,124,255,0)'); return g; },
+    borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0 }];
+  if (state.cmp.enabled && cmpUnit.length > 0) {
+    const ps = dailySeriesInRange(cmpUnit, state.cmp.start, state.cmp.end, 'r');
+    datasets.push({ label: 'Pembanding', data: ps.values, borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
+  }
+  makeChart(`${slug}_trend`, {
+    type: 'line', data: { labels: cs.labels.map(FMT_DATE_SHORT), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_RP(ctx.parsed.y)}` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => 'Rp ' + FMT_COMPACT(v) } } }
+    }
+  });
+
+  // Pies for this unit
+  renderPie(`${slug}_piePlatform`, cur.byPlatform, 'Platform');
+  renderPie(`${slug}_pieJenis`, cur.byJenis, 'Jenis Tiket');
+  renderPie(`${slug}_pieKelompok`, cur.byKelompok, 'Kelompok');
+}
+
+// ============ PENGUNJUNG — data dari Database_Pengunjung (state.pengunjungRaw) ============
+function renderPengunjungOverall() {
+  const curRows = filterPengunjung(state.cur.start, state.cur.end);
+  const cmpRows = state.cmp.enabled ? filterPengunjung(state.cmp.start, state.cmp.end) : [];
+  const cur = aggregatePengunjung(curRows);
+  const cmp = aggregatePengunjung(cmpRows);
+
+  const realUnits = getRealUnitsFromPengunjung();
+  const allUnits = [...realUnits];
+  // Tampilkan "Others" jika ada data TIDAK_DITEMUKAN di seluruh dataset (bukan hanya periode aktif)
+  const tidakAda = state.pengunjungRaw.some(r => r.u === TIDAK_DITEMUKAN);
+  if (tidakAda) allUnits.push(TIDAK_DITEMUKAN);
+
+  // KPI: per-unit saja (tanpa TOTAL PENGUNJUNG)
+  const colorNames = ['amber', 'green', 'blue', 'purple', 'pink', 'teal', ''];
+  const cards = [];
+  allUnits.forEach((u, i) => {
+    const displayLabel = u === TIDAK_DITEMUKAN ? 'OTHERS' : unitDisplayName(u).toUpperCase();
+    cards.push({
+      cls: colorNames[i % colorNames.length],
+      label: displayLabel,
+      curr: cur.byUnit.get(u) || 0,
+      prev: cmp.byUnit.get(u) || 0,
+      isCurrency: false, unit: 'orang'
+    });
+  });
+  document.getElementById('pengunjungKpi').innerHTML = cards.map(c => renderKPICard(c)).join('');
+  const grid = document.getElementById('pengunjungKpi');
+  grid.className = `kpi-grid cols-${cards.length <= 3 ? cards.length : cards.length <= 6 ? 3 : 4}`;
+
+  // Stacked bar harian per unit
+  const dates = [];
+  let cd = ISOToDate(state.cur.start), endD = ISOToDate(state.cur.end);
+  while (cd <= endD) { dates.push(dateToISO(cd)); cd = addDays(cd, 1); }
+
+  const colorList = ['#004A99', '#007CFF', '#007CFF', '#5BAAFF', '#A3CFFF', '#E7F2FF', '#AEB2BE'];
+  const datasets = allUnits.map((u, i) => {
+    const m = new Map();
+    curRows.filter(r => r.u === u).forEach(r => { m.set(r.d, (m.get(r.d) || 0) + r.q); });
+    return {
+      label: unitDisplayName(u),
+      data: dates.map(d => m.get(d) || 0),
+      backgroundColor: colorList[i % colorList.length],
+      borderColor: colorList[i % colorList.length],
+      borderWidth: 0, stack: 'visitors'
+    };
+  });
+  makeChart('pengunjungTrend', {
+    type: 'bar', data: { labels: dates.map(FMT_DATE_SHORT), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_NUM(ctx.parsed.y)} orang` } } },
+      scales: { x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 14 } }, y: { stacked: true, grid: { color: '#E7EBF5' }, ticks: { callback: v => FMT_COMPACT(v) } } }
+    }
+  });
+}
+
+function renderUnitPengunjung(unit, idx) {
+  const slug = `unitvis_${idx}`;
+  const curUnit = filterPengunjung(state.cur.start, state.cur.end).filter(r => r.u === unit);
+  const cmpUnit = state.cmp.enabled ? filterPengunjung(state.cmp.start, state.cmp.end).filter(r => r.u === unit) : [];
+  const cur = aggregatePengunjung(curUnit);
+  const cmp = aggregatePengunjung(cmpUnit);
+  const nDaysCur = Math.max(1, daysBetween(ISOToDate(state.cur.start), ISOToDate(state.cur.end)) + 1);
+  const nDaysCmp = Math.max(1, daysBetween(ISOToDate(state.cmp.start || state.cur.start), ISOToDate(state.cmp.end || state.cur.end)) + 1);
+
+  // KPI
+  const cards = [
+    { cls: 'blue', label: 'TOTAL PENGUNJUNG', curr: cur.total, prev: cmp.total, isCurrency: false, unit: 'orang' },
+    { cls: '', label: 'AVG PER HARI', curr: cur.total / nDaysCur, prev: cmp.total / nDaysCmp, isCurrency: false, unit: 'orang/hari' },
+  ];
+  const kpiEl = document.getElementById(`${slug}_kpi`);
+  if (kpiEl) kpiEl.innerHTML = cards.map(c => renderKPICard(c)).join('');
+
+  // Daily trend — menggunakan kolom q dari pengunjungRaw
+  const cs = dailySeriesInRangePengunjung(curUnit, state.cur.start, state.cur.end);
+
+  // ===========================
+  // tapping section (inject)
+  // ===========================
+
+  const datasets = [{ label: 'Periode Analisis', data: cs.values, borderColor: '#60a5fa',
+    backgroundColor: ctx => { const g = ctx.chart.ctx.createLinearGradient(0,0,0,300); g.addColorStop(0, 'rgba(91,170,255,0.3)'); g.addColorStop(1, 'rgba(91,170,255,0)'); return g; },
+    borderWidth: 2.5, fill: true, tension: 0.3, pointRadius: 0 }];
+  if (state.cmp.enabled && cmpUnit.length > 0) {
+    const ps = dailySeriesInRangePengunjung(cmpUnit, state.cmp.start, state.cmp.end);
+    datasets.push({ label: 'Pembanding', data: ps.values, borderColor: '#71747D', borderWidth: 1.8, fill: false, tension: 0.3, pointRadius: 0, borderDash: [5,4] });
+  }
+  makeChart(`${slug}_trend`, {
+    type: 'line', data: { labels: cs.labels.map(FMT_DATE_SHORT), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', align: 'end' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${FMT_NUM(ctx.parsed.y)} orang` } } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { grid: { color: '#E7EBF5' }, ticks: { callback: v => FMT_COMPACT(v) } } }
+    }
+  });
+}
+
+// ============ DOM BUILDERS for per-unit sections ============
+function buildPerUnitSections() {
+  const realUnits = getRealUnits();
+  let html = '';
+  realUnits.forEach((unit, idx) => {
+    const slug = `unit_${idx}`;
+    const displayName = unitDisplayName(unit);
+    html += `
+      <div class="section-header pendapatan-section">
+        <span class="section-num">UNIT ${idx+1}</span>
+        <h2 class="section-title">${displayName} <em>· Pendapatan</em></h2>
+        <div class="section-subtitle">${unit}</div>
+      </div>
+      <div class="kpi-grid cols-3" id="${slug}_kpi"></div>
+      <div class="row row-2">
+        <div class="panel">
+          <div class="panel-header"><div><div class="panel-title">Tren Pendapatan Harian</div><div class="panel-subtitle">Daily revenue · ${displayName}</div></div></div>
+          <div class="chart-wrap"><canvas id="${slug}_trend"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div><div class="panel-title">Pendapatan per Platform</div><div class="panel-subtitle">${displayName}</div></div></div>
+          <div class="chart-wrap"><canvas id="${slug}_piePlatform"></canvas></div>
+        </div>
+      </div>
+      <div class="row row-2">
+        <div class="panel">
+          <div class="panel-header"><div><div class="panel-title">Pendapatan per Jenis Tiket</div><div class="panel-subtitle">${displayName}</div></div></div>
+          <div class="chart-wrap"><canvas id="${slug}_pieJenis"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div><div class="panel-title">Pendapatan per Kelompok Jenis Tiket</div><div class="panel-subtitle">${displayName}</div></div></div>
+          <div class="chart-wrap"><canvas id="${slug}_pieKelompok"></canvas></div>
+        </div>
+      </div>
+    `;
+  });
+  document.getElementById('perUnitPendapatan').innerHTML = html;
+}
+
+function buildPerUnitVisitorSections() {
+  const realUnits = getRealUnits();
+  let html = '';
+  realUnits.forEach((unit, idx) => {
+    const slug = `unitvis_${idx}`;
+    const displayName = unitDisplayName(unit);
+    html += `
+      <div class="section-header pengunjung-section">
+        <span class="section-num">UNIT ${idx+1}</span>
+        <h2 class="section-title">${displayName} <em>· Pengunjung</em></h2>
+        <div class="section-subtitle">${unit}</div>
+      </div>
+      <div class="kpi-grid cols-2" id="${slug}_kpi"></div>
+      <div class="row row-1">
+        <div class="panel">
+          <div class="panel-header"><div><div class="panel-title">Tren Pengunjung Harian</div><div class="panel-subtitle">Daily visitors · ${displayName}</div></div></div>
+          <div class="chart-wrap"><canvas id="${slug}_trend"></canvas></div>
+        </div>
+      </div>
+    `;
+  });
+  document.getElementById('perUnitPengunjung').innerHTML = html;
+}
+
+// ============ MAIN RENDER ============
+function renderAll() {
+  if (!state.cur.start || !state.cur.end) return;
+  updateGlobalHeader();
+
+  if (state.pdaRaw.length > 0) renderPDA();
+
+  if (state.penjRaw.length > 0) {
+    renderPendapatanOverall();
+    const realUnits = getRealUnits();
+    realUnits.forEach((u, i) => renderUnitPendapatan(u, i));
+    renderPengunjungOverall();
+    realUnits.forEach((u, i) => renderUnitPengunjung(u, i));
+  }
+}
+
+// ============ DATE PICKER POPOVER ============
+let popoverDraft = null;
+function openPopover() {
+  popoverDraft = JSON.parse(JSON.stringify({ cur: state.cur, cmp: state.cmp }));
+  const popover = document.getElementById('datePopover');
+  const backdrop = document.getElementById('popoverBackdrop');
+  const trigger = document.getElementById('dateTrigger');
+  const rect = trigger.getBoundingClientRect();
+  popover.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  popover.style.left = (rect.left + window.scrollX) + 'px';
+  popover.classList.add('open');
+  backdrop.classList.add('open');
+  trigger.classList.add('open');
+  syncPopoverUI();
+}
+function closePopover() {
+  document.getElementById('datePopover').classList.remove('open');
+  document.getElementById('popoverBackdrop').classList.remove('open');
+  document.getElementById('dateTrigger').classList.remove('open');
+  popoverDraft = null;
+}
+function syncPopoverUI() {
+  if (!popoverDraft) return;
+  document.getElementById('curStartInput').value = popoverDraft.cur.start;
+  document.getElementById('curEndInput').value = popoverDraft.cur.end;
+  document.getElementById('cmpStartInput').value = popoverDraft.cmp.start || '';
+  document.getElementById('cmpEndInput').value = popoverDraft.cmp.end || '';
+  document.querySelectorAll('.preset-item').forEach(el => el.classList.toggle('active', el.dataset.preset === popoverDraft.cur.presetKey));
+  document.getElementById('compareToggle').classList.toggle('on', popoverDraft.cmp.enabled);
+  document.getElementById('compareModeSelect').value = popoverDraft.cmp.mode;
+}
+function applyPresetToDraft(key) {
+  const anchor = state.dataMax ? ISOToDate(state.dataMax) : new Date();
+  let start, end;
+  switch(key) {
+    case 'today': start = end = anchor; break;
+    case 'yesterday': start = end = addDays(anchor, -1); break;
+    case 'this_week_sun': start = startOfWeekSunday(anchor); end = anchor; break;
+    case 'last7': end = anchor; start = addDays(anchor, -6); break;
+    case 'last_week_sun_sat': { const sow = startOfWeekSunday(anchor); end = addDays(sow, -1); start = addDays(end, -6); break; }
+    case 'last28': end = anchor; start = addDays(anchor, -27); break;
+    case 'last30': end = anchor; start = addDays(anchor, -29); break;
+    case 'this_month': start = new Date(anchor.getFullYear(), anchor.getMonth(), 1); end = anchor; break;
+    case 'last_month': start = new Date(anchor.getFullYear(), anchor.getMonth()-1, 1); end = new Date(anchor.getFullYear(), anchor.getMonth(), 0); break;
+    case 'ytd': start = new Date(anchor.getFullYear(), 0, 1); end = anchor; break;
+    case 'all_time': start = state.dataMin ? ISOToDate(state.dataMin) : anchor; end = state.dataMax ? ISOToDate(state.dataMax) : anchor; break;
+    default: end = anchor; start = addDays(anchor, -27); key = 'last28';
+  }
+  popoverDraft.cur.start = dateToISO(start);
+  popoverDraft.cur.end = dateToISO(end);
+  popoverDraft.cur.presetKey = key;
+  recomputeDraftCompare();
+  syncPopoverUI();
+}
+function recomputeDraftCompare() {
+  if (popoverDraft.cmp.mode === 'custom') return;
+  const cs = ISOToDate(popoverDraft.cur.start), ce = ISOToDate(popoverDraft.cur.end);
+  const len = daysBetween(cs, ce);
+  if (popoverDraft.cmp.mode === 'previous_period') {
+    const ne = addDays(cs, -1); const ns = addDays(ne, -len);
+    popoverDraft.cmp.start = dateToISO(ns); popoverDraft.cmp.end = dateToISO(ne);
+  } else if (popoverDraft.cmp.mode === 'previous_year') {
+    const ns = new Date(cs); ns.setFullYear(ns.getFullYear()-1);
+    const ne = new Date(ce); ne.setFullYear(ne.getFullYear()-1);
+    popoverDraft.cmp.start = dateToISO(ns); popoverDraft.cmp.end = dateToISO(ne);
+  } else if (popoverDraft.cmp.mode === 'previous_year_match_dow') {
+    popoverDraft.cmp.start = dateToISO(addDays(cs, -364));
+    popoverDraft.cmp.end = dateToISO(addDays(ce, -364));
+  }
+}
+function buildPresetList() {
+  const presets = [
+    { key: 'custom', label: 'Custom' }, { key: 'today', label: 'Today' }, { key: 'yesterday', label: 'Yesterday' },
+    { key: 'this_week_sun', label: 'This week (Sun - Today)' }, { key: 'last7', label: 'Last 7 days' },
+    { key: 'last_week_sun_sat', label: 'Last week (Sun - Sat)' }, { key: 'last28', label: 'Last 28 days' },
+    { key: 'last30', label: 'Last 30 days' }, { key: 'this_month', label: 'This month' },
+    { key: 'last_month', label: 'Last month' }, { key: 'ytd', label: 'Year to date' }, { key: 'all_time', label: 'All time' },
+  ];
+  document.getElementById('presetList').innerHTML = presets.map(p => `<div class="preset-item" data-preset="${p.key}">${p.label}</div>`).join('');
+  document.querySelectorAll('.preset-item').forEach(el => {
+    el.addEventListener('click', () => {
+      if (el.dataset.preset === 'custom') { popoverDraft.cur.presetKey = 'custom'; syncPopoverUI(); }
+      else applyPresetToDraft(el.dataset.preset);
+    });
+  });
+}
+
+// ============ EXPORT PDF ============
+function setPdfStatus(text) { document.getElementById('pdfStatus').textContent = text; }
+// ============ PDF EXPORT ============
+// Strategi: capture langsung dari DOM live (bukan clone off-screen) section per section,
+// rangkai jadi multi-page A4 portrait. Lebih reliable daripada html2pdf bulk capture
+// karena (a) tidak kena canvas memory limit di section panjang, (b) tidak ada masalah
+// off-screen rendering (chart yang dikloning sering blank di Firefox/Safari),
+// (c) fonts & charts sudah pasti rendered karena pakai elemen yang lagi tampil.
+
+// Dynamic script loader — dipakai sebagai fallback kalau html2pdf bundle tidak
+// mengekspos jsPDF/html2canvas sebagai global yang bisa diakses.
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === '1') return resolve();
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('Script load failed: ' + src)));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = src; s.async = true;
+    s.onload = () => { s.dataset.loaded = '1'; resolve(); };
+    s.onerror = () => reject(new Error('Script load failed: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+// Resolusi jsPDF & html2canvas dari berbagai kemungkinan lokasi globalnya.
+// html2pdf bundle 0.10.x kadang expose ke window.jspdf (lowercase) atau
+// window.jsPDF langsung, kadang cuma lewat factory html2pdf(). Kita coba semua.
+async function resolvePdfLibs() {
+  // Helper untuk cari jsPDF di semua kemungkinan tempat
+  const findJsPDF = () => window.jspdf?.jsPDF || window.jsPDF || (window.jspdf && typeof window.jspdf === 'function' ? window.jspdf : null);
+  const findHtml2Canvas = () => window.html2canvas;
+
+  let jsPDFCtor = findJsPDF();
+  let html2canvasFn = findHtml2Canvas();
+  if (jsPDFCtor && html2canvasFn) return { jsPDFCtor, html2canvasFn };
+
+  // Coba pancing dari factory html2pdf — beberapa versi expose komponennya
+  // hanya setelah instance dibuat.
+  if (typeof window.html2pdf === 'function') {
+    try {
+      const inst = window.html2pdf();
+      // html2pdf instance simpan jsPDF & html2canvas di internalnya
+      if (inst && inst.constructor && inst.constructor.jsPDF) {
+        jsPDFCtor = jsPDFCtor || inst.constructor.jsPDF;
+      }
+      jsPDFCtor = jsPDFCtor || findJsPDF();
+      html2canvasFn = html2canvasFn || findHtml2Canvas();
+    } catch (e) { /* ignore */ }
+  }
+
+  if (jsPDFCtor && html2canvasFn) return { jsPDFCtor, html2canvasFn };
+
+  // Fallback terakhir: load library terpisah dari CDN
+  if (!html2canvasFn) {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    html2canvasFn = findHtml2Canvas();
+  }
+  if (!jsPDFCtor) {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    jsPDFCtor = findJsPDF();
+  }
+
+  if (!jsPDFCtor || !html2canvasFn) {
+    throw new Error('jsPDF/html2canvas tidak bisa di-load. Cek koneksi internet.');
+  }
+  return { jsPDFCtor, html2canvasFn };
+}
+
+async function waitForChartsAndFonts() {
+  // Tunggu semua font Google Fonts selesai load
+  if (document.fonts && document.fonts.ready) {
+    try { await document.fonts.ready; } catch(e) { /* ignore */ }
+  }
+  // Tunggu Chart.js selesai render: 2x requestAnimationFrame + idle
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // Force resize semua chart supaya canvas sinkron dgn ukuran wrapper saat ini
+  Object.values(charts).forEach(c => { try { c.resize(); c.update('none'); } catch(e) {} });
+  // Beri jeda render terakhir setelah resize
+  await new Promise(r => setTimeout(r, 400));
+}
+
+async function exportToPDF() {
+  const btn = document.getElementById('exportPdfBtn');
+  const overlay = document.getElementById('pdfOverlay');
+
+  btn.disabled = true;
+  overlay.classList.add('show');
+  setPdfStatus('Mempersiapkan dashboard');
+
+  // Snapshot elemen-elemen yang akan kita modifikasi sementara, supaya bisa
+  // di-restore di finally walaupun terjadi error.
+  const tempHidden = [];
+
+  try {
+    closePopover();
+    document.body.classList.add('pdf-mode');
+
+    setPdfStatus('Memuat library PDF');
+    const { jsPDFCtor, html2canvasFn } = await resolvePdfLibs();
+
+    setPdfStatus('Menunggu chart & font siap');
+    await waitForChartsAndFonts();
+
+    // Sembunyikan elemen UI yang tidak boleh ikut di PDF (sebagai safety net
+    // tambahan di luar CSS pdf-mode, untuk elemen yg posisinya fixed/absolute).
+    const toHide = document.querySelectorAll('.export-bar, .pdf-overlay, .toast, .date-popover, .date-popover-backdrop, .status-bar, .date-picker-bar');
+    toHide.forEach(el => {
+      if (el.id === 'pdfOverlay') return; // overlay tetap visible buat status user
+      tempHidden.push({ el, display: el.style.display });
+      el.style.display = 'none';
+    });
+
+    setPdfStatus('Merender dashboard ke gambar (10-30 detik)');
+
+    // Container yang akan di-capture: seluruh body. html2canvas otomatis
+    // ngambil scroll-height penuh, jadi semua section ke-capture.
+    // scale: 2 untuk ketajaman teks; backgroundColor eksplisit supaya tidak transparan.
+    const canvas = await html2canvasFn(document.body, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#F4F7FE',
+      logging: false,
+      letterRendering: true,
+      windowWidth: document.documentElement.clientWidth,
+      windowHeight: document.documentElement.scrollHeight,
+      // Skip elemen yg tidak perlu (overlay/popover yg mungkin masih DOM tapi hidden)
+      ignoreElements: (el) => {
+        if (!el.classList) return false;
+        return el.id === 'pdfOverlay' || el.id === 'toast' ||
+               el.classList.contains('date-popover') ||
+               el.classList.contains('date-popover-backdrop');
+      },
+    });
+
+    setPdfStatus('Mendeteksi batas aman potong');
+
+    // A4 portrait: 210 x 297 mm. Margin 8mm. Area kerja 194 x 281 mm.
+    const PAGE_W_MM = 210, PAGE_H_MM = 297, MARGIN_MM = 8;
+    const CONTENT_W_MM = PAGE_W_MM - MARGIN_MM * 2;
+    const CONTENT_H_MM = PAGE_H_MM - MARGIN_MM * 2;
+
+    // Ukuran canvas dalam pixel — kita map lebar canvas penuh ke CONTENT_W_MM
+    const pxPerMm = canvas.width / CONTENT_W_MM;
+    const pageHeightPx = Math.floor(CONTENT_H_MM * pxPerMm);
+
+    // SMART PAGINATION: kumpulkan Y-coordinate (di canvas pixel) dari batas-batas
+    // aman untuk memotong halaman. "Batas aman" = posisi top atau bottom dari elemen
+    // blok besar (.row, .section-header, .kpi-grid, .insights, .compare-summary, .header, .footer).
+    // Memotong di antara dua blok jauh lebih rapi daripada memotong di tengah chart/KPI.
+    //
+    // bodyRect.top biasanya negatif (kalau halaman di-scroll) atau 0; semua
+    // koordinat elemen kita normalkan terhadap top body, lalu kalikan dengan
+    // scale html2canvas (yaitu 2 — sama dengan scale param di atas).
+    const CAPTURE_SCALE = 2;
+    const bodyRect = document.body.getBoundingClientRect();
+    const blockSelector = '.header, .compare-summary, .section-header, .kpi-grid, .insights, .row, .footer';
+    const blockEls = Array.from(document.querySelectorAll(blockSelector))
+      .filter(el => !el.closest('.pdf-overlay') && !el.closest('.date-popover'));
+
+    // safeCuts = array of Y-pixel positions di canvas dimana boleh memotong.
+    // Selalu masukin 0 (top dokumen) dan canvas.height (bottom).
+    const safeCutsSet = new Set([0, canvas.height]);
+    for (const el of blockEls) {
+      const r = el.getBoundingClientRect();
+      const top = Math.round((r.top - bodyRect.top) * CAPTURE_SCALE);
+      const bottom = Math.round((r.bottom - bodyRect.top) * CAPTURE_SCALE);
+      // Posisi potong yang nyaman: tepat di bottom blok (sebelum gap ke blok berikutnya)
+      // dan tepat di top blok (sesudah gap dari blok sebelumnya). Keduanya di-add.
+      if (top >= 0 && top <= canvas.height) safeCutsSet.add(top);
+      if (bottom >= 0 && bottom <= canvas.height) safeCutsSet.add(bottom);
+    }
+    const safeCuts = Array.from(safeCutsSet).sort((a, b) => a - b);
+
+    // Tentukan posisi potong tiap halaman secara greedy:
+    // mulai dari cursor=0, target potong di cursor+pageHeightPx, lalu mundurkan
+    // ke safeCut terbesar yang ≤ target. Kalau tidak ada safeCut di antara
+    // (cursor, target] (artinya satu blok lebih tinggi dari halaman), terpaksa
+    // potong di target (buta) — minimal halaman tetap progress.
+    const cutPoints = [0]; // Y-pixel di canvas tempat tiap halaman dimulai
+    let cursor = 0;
+    while (cursor < canvas.height) {
+      const target = cursor + pageHeightPx;
+      if (target >= canvas.height) {
+        // Halaman terakhir cukup sampai bottom
+        cutPoints.push(canvas.height);
+        break;
+      }
+      // Cari safeCut terbesar yang > cursor dan ≤ target
+      let bestCut = -1;
+      for (const c of safeCuts) {
+        if (c > cursor && c <= target) bestCut = c;
+        if (c > target) break;
+      }
+      // Kalau safeCut yang ditemukan terlalu dekat ke cursor (halaman bakal pendek
+      // sekali — kurang dari 60% kapasitas halaman), lebih baik potong buta di
+      // target supaya density halaman tetap tinggi. Kalau tidak ada safeCut sama
+      // sekali, juga fallback ke target.
+      const minAcceptableCut = cursor + Math.floor(pageHeightPx * 0.6);
+      if (bestCut === -1 || bestCut < minAcceptableCut) {
+        bestCut = target;
+      }
+      // Safety: pastikan kita selalu maju minimal 1 piksel supaya tidak infinite loop
+      if (bestCut <= cursor) bestCut = target;
+      cutPoints.push(bestCut);
+      cursor = bestCut;
+    }
+
+    const totalPages = cutPoints.length - 1;
+
+    const pdf = new jsPDFCtor({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+
+    // Buat satu canvas slice yang akan kita reuse untuk tiap halaman
+    const sliceCanvas = document.createElement('canvas');
+    const sliceCtx = sliceCanvas.getContext('2d');
+    sliceCanvas.width = canvas.width;
+
+    for (let p = 0; p < totalPages; p++) {
+      setPdfStatus(`Membuat halaman ${p+1}/${totalPages}`);
+
+      const srcY = cutPoints[p];
+      const nextY = cutPoints[p + 1];
+      const sliceHeightPx = nextY - srcY;
+      if (sliceHeightPx <= 0) continue; // safety
+
+      sliceCanvas.height = sliceHeightPx;
+      // Paint background dulu — kalau tidak, area kosong di canvas asli akan transparan
+      // dan tampil hitam pekat di JPEG (atau putih kalau PNG)
+      sliceCtx.fillStyle = '#F4F7FE';
+      sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+      sliceCtx.drawImage(canvas, 0, srcY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+
+      const sliceHeightMm = sliceHeightPx / pxPerMm;
+
+      if (p > 0) pdf.addPage();
+      // Paint background halaman dulu (biar area kosong di bawah slice tetap dark)
+      pdf.setFillColor(244, 247, 254);
+      pdf.rect(0, 0, PAGE_W_MM, PAGE_H_MM, 'F');
+      pdf.addImage(
+        sliceCanvas.toDataURL('image/jpeg', 0.92),
+        'JPEG',
+        MARGIN_MM,
+        MARGIN_MM,
+        CONTENT_W_MM,
+        sliceHeightMm
+      );
+    }
+
+    setPdfStatus('Menyimpan file');
+    const today = new Date();
+    const datePart = `${today.getFullYear()}${pad(today.getMonth()+1)}${pad(today.getDate())}`;
+    const filename = `Ancol_Performance_${state.cur.start}_to_${state.cur.end}_${datePart}.pdf`;
+    pdf.save(filename);
+    showToast(`✓ PDF berhasil di-download (${totalPages} halaman): ${filename}`, 'success');
+  } catch (err) {
+    console.error('PDF export error:', err);
+    showToast('✗ Gagal membuat PDF: ' + (err.message || 'Unknown error'), 'error');
+  } finally {
+    // Restore semua elemen yg tadi disembunyikan
+    tempHidden.forEach(({ el, display }) => { el.style.display = display; });
+    document.body.classList.remove('pdf-mode');
+    Object.values(charts).forEach(c => { try { c.resize(); } catch(e) {} });
+    overlay.classList.remove('show');
+    btn.disabled = false;
+    setPdfStatus('Rendering dashboard');
+  }
+}
+
+
+// ============ EVENT BINDINGS ============
+document.getElementById('refreshAllBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('refreshAllBtn');
+  btn.disabled = true;
+  await Promise.all([loadPDA(), loadPenjualan(), loadPengunjung()]);
+  recomputeDataRange();
+  // Rebuild section DOMs in case unit list changed
+  buildPerUnitSections();
+  buildPerUnitVisitorSections();
+  renderAll();
+  btn.disabled = false;
+});
+document.getElementById('exportPdfBtn').addEventListener('click', exportToPDF);
+document.getElementById('dateTrigger').addEventListener('click', openPopover);
+document.getElementById('popoverBackdrop').addEventListener('click', closePopover);
+document.getElementById('curStartInput').addEventListener('change', e => { popoverDraft.cur.start = e.target.value; popoverDraft.cur.presetKey = 'custom'; recomputeDraftCompare(); syncPopoverUI(); });
+document.getElementById('curEndInput').addEventListener('change', e => { popoverDraft.cur.end = e.target.value; popoverDraft.cur.presetKey = 'custom'; recomputeDraftCompare(); syncPopoverUI(); });
+document.getElementById('cmpStartInput').addEventListener('change', e => { popoverDraft.cmp.start = e.target.value; popoverDraft.cmp.mode = 'custom'; syncPopoverUI(); });
+document.getElementById('cmpEndInput').addEventListener('change', e => { popoverDraft.cmp.end = e.target.value; popoverDraft.cmp.mode = 'custom'; syncPopoverUI(); });
+document.getElementById('compareToggle').addEventListener('click', () => { popoverDraft.cmp.enabled = !popoverDraft.cmp.enabled; syncPopoverUI(); });
+document.getElementById('compareModeSelect').addEventListener('change', e => { popoverDraft.cmp.mode = e.target.value; if (e.target.value !== 'custom') recomputeDraftCompare(); syncPopoverUI(); });
+document.getElementById('cancelBtn').addEventListener('click', closePopover);
+document.getElementById('applyBtn').addEventListener('click', () => { state.cur = { ...popoverDraft.cur }; state.cmp = { ...popoverDraft.cmp }; closePopover(); renderAll(); });
+document.querySelectorAll('#pdaTrendMetricPills .metric-pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#pdaTrendMetricPills .metric-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); state.trendMetric = btn.dataset.metric; renderPDATrend();
+  });
+});
+
+buildPresetList();
+
+// ============ INIT ============
+(async function init() {
+  // Try to load from cache first for instant render
+  const cached = loadStateFromStorage();
+  if (cached) {
+    if (cached.pdaCache && cached.pdaCache.length > 0) state.pdaRaw = cached.pdaCache;
+    if (cached.penjCache && cached.penjCache.length > 0) state.penjRaw = cached.penjCache;
+    if (cached.pengunjungCache && cached.pengunjungCache.length > 0) state.pengunjungRaw = cached.pengunjungCache;
+    if (cached.pdaUrl) state.pdaUrl = cached.pdaUrl;
+    if (cached.penjUrl) state.penjUrl = cached.penjUrl;
+    if (cached.pengunjungUrl) state.pengunjungUrl = cached.pengunjungUrl;
+    state.pdaLastFetch = cached.pdaLastFetch;
+    state.penjLastFetch = cached.penjLastFetch;
+    state.pengunjungLastFetch = cached.pengunjungLastFetch;
+  }
+  // Bootstrap fallbacks if still empty
+  if (state.pdaRaw.length === 0) state.pdaRaw = PDA_FALLBACK;
+  if (state.penjRaw.length === 0) state.penjRaw = PENJ_FALLBACK;
+  // No fallback for pengunjung - it should load from spreadsheet
+  
+  recomputeDataRange();
+  applyPreset('last28');
+  buildPerUnitSections();
+  buildPerUnitVisitorSections();
+  renderAll();
+  setStatus('pda', state.pdaRaw === PDA_FALLBACK ? 'cached' : 'cached', state.pdaRaw === PDA_FALLBACK ? 'PDA · DEMO' : 'PDA · CACHED');
+  setStatus('penj', state.penjRaw === PENJ_FALLBACK ? 'cached' : 'cached', state.penjRaw === PENJ_FALLBACK ? 'PENJUALAN · DEMO' : 'PENJUALAN · CACHED');
+  setStatus('pengunjung', state.pengunjungRaw.length > 0 ? 'cached' : 'loading', 'PENGUNJUNG · FETCHING');
+
+  // Now try fresh fetch in background
+  const [okPda, okPenj, okPengunjung] = await Promise.all([loadPDA(true), loadPenjualan(true), loadPengunjung(true)]);
+  if (okPda || okPenj || okPengunjung) {
+    recomputeDataRange();
+    applyPreset(state.cur.presetKey || 'last28');
+    buildPerUnitSections();
+    buildPerUnitVisitorSections();
+    renderAll();
+  }
+})();
+
+</script>
+</body>
+</html>
